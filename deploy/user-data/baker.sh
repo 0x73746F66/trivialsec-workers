@@ -82,8 +82,8 @@ function deploy_worker() {
     aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/build-${COMMON_VERSION}.zip /tmp/trivialsec/build.zip
     unzip -qo /tmp/trivialsec/worker.zip -d /tmp/trivialsec
     unzip -qo /tmp/trivialsec/build.zip -d /srv/app
-    cp -nr /tmp/trivialsec/workers/src/* /srv/app/
-    cp -nr /tmp/trivialsec/workers/bin/* /srv/app/lib/bin/
+    cp -nr /tmp/trivialsec/src/* /srv/app/
+    cp -nr /tmp/trivialsec/bin/* /srv/app/lib/bin/
     cp -n /tmp/trivialsec/circus.ini /srv/app/circus.ini
     cp -n /tmp/trivialsec/circusd-logger.yaml /srv/app/circusd-logger.yaml
     cp -n /tmp/trivialsec/requirements.txt /srv/app/requirements.txt
