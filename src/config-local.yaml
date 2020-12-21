@@ -1,11 +1,9 @@
 ---
 app:
   env: Dev
-  version: 20201221
+  version: 20201220
   log_file: /tmp/application.log
   log_level: DEBUG
-  http_proxy: proxy.trivialsec.com:3128
-  https_proxy: proxy.trivialsec.com:3128
   frontend:
     site_scheme: "http://"
     site_domain: localhost:5000

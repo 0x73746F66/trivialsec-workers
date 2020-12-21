@@ -1,11 +1,9 @@
 ---
 app:
   env: Prod
-  version: 20201221
+  version: 20201220
   log_file: /tmp/application.log
   log_level: WARNING
-  http_proxy: proxy.trivialsec.local:3128
-  https_proxy: proxy.trivialsec.local:3128
   frontend:
     site_scheme: "https://"
     site_domain: www.trivialsec.com
