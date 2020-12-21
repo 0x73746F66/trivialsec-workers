@@ -2,6 +2,7 @@ before_script:
   - aws --version
   - pylint --version
   - pip --version
+  - make common
 
 stages:
   - test
@@ -29,6 +30,8 @@ build:
   stage: build
   variables:
     COMMON_VERSION: 0.1.4
+    AMASS_VERSION: 3.10.5
+    OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
   script:
     - make package
   only:
@@ -42,6 +45,8 @@ build-upload:
   stage: build
   variables:
     COMMON_VERSION: 0.1.4
+    AMASS_VERSION: 3.10.5
+    OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
     AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
     AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
