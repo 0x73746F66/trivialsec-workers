@@ -106,12 +106,17 @@ function baker_checker() {
         sleep ${interval}
         ((i=i+1))
     done
-    echo
     echo Baking DONE!
     echo '-------------------------------------------'
     set -x
     scp -4 baker:/var/log/user-data.log .
+    set +x
+    echo '-------------------------------------------'
+    echo Baker logs
     cat user-data.log
+    echo
+    echo '-------------------------------------------'
+    set -x
 }
 
 declare -a old_instances_query=\($(aws ec2 describe-instances --filters "Name=tag:Name,Values=Worker" --query 'Reservations[].Instances[].InstanceId' --output text)\)
