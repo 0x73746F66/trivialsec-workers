@@ -7,7 +7,7 @@ if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}x${NC} This script must be run as root" 
    exit 1
 fi
-if [[ ! -d scripts ]]; then
+if [[ ! -d src ]]; then
     echo -e "${RED}x${NC} Run this from the project root directory"
     exit 0
 fi
