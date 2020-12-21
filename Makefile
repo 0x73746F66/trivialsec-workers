@@ -31,7 +31,7 @@ common: prep
 	unzip -qo build.zip
 	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
 
-install-dev:
+install-dev: common
 	pip install -q -U pip setuptools pylint wheel awscli
 	pip install -q -U --no-cache-dir --isolated -r ./docker/requirements.txt
 
