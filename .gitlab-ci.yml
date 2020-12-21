@@ -1,3 +1,21 @@
+variables:
+  COMMON_VERSION: 0.1.5
+  AMASS_VERSION: 3.10.5
+  OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
+  AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+  AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+  APP_NAME: worker
+  TAG_ENV: Prod
+  TAG_PURPOSE: Deploy
+  BASE_AMI: ami-09f765d333a8ebb4b
+  SUBNET_ID: subnet-8b05e8c3
+  DEFAULT_INSTANCE_TYPE: t3a.medium
+  IAM_INSTANCE_PROFILE: EC2-TrivialSec
+  COST_CENTER: saas
+  PRIV_KEY_NAME: trivialsec-prod
+  SECURITY_GROUP_IDS: sg-04a8dac724adcad3c sg-01bbdeecc61359d59 sg-0b37a6d2e9a6ae0e8
+
 before_script:
   - aws --version
   - pylint --version
@@ -14,8 +32,6 @@ lint:
   tags:
     - python
   stage: test
-  variables:
-    COMMON_VERSION: 0.1.4
   script:
     - make common
     - pip install -q -r docker/requirements.txt
@@ -30,10 +46,6 @@ build:
   tags:
     - python
   stage: build
-  variables:
-    COMMON_VERSION: 0.1.4
-    AMASS_VERSION: 3.10.5
-    OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
   script:
     - make package
   only:
@@ -45,13 +57,6 @@ build-upload:
   tags:
     - python
   stage: build
-  variables:
-    COMMON_VERSION: 0.1.4
-    AMASS_VERSION: 3.10.5
-    OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
-    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
-    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
-    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
   script:
     - make package-upload
   only:
@@ -62,20 +67,6 @@ deploy:
   tags:
     - python
   stage: deploy
-  variables:
-    APP_NAME: worker
-    TAG_ENV: Prod
-    TAG_PURPOSE: Deploy
-    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
-    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
-    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
-    BASE_AMI: ami-09f765d333a8ebb4b
-    SUBNET_ID: subnet-8b05e8c3
-    DEFAULT_INSTANCE_TYPE: t3a.medium
-    IAM_INSTANCE_PROFILE: EC2-TrivialSec
-    COST_CENTER: saas
-    PRIV_KEY_NAME: trivialsec-prod
-    SECURITY_GROUP_IDS: sg-04a8dac724adcad3c sg-01bbdeecc61359d59 sg-0b37a6d2e9a6ae0e8
   script:
     - NUM_INSTANCES=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=Worker" --query 'Reservations[].Instances[]' | jq '. | length')
     - echo NUM_INSTANCES ${NUM_INSTANCES}
@@ -87,10 +78,6 @@ deploy:
 teardown:
   retry: 2
   stage: teardown
-  variables:
-    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
-    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
-    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
   script:
     - ./deploy/teardown.sh
   only:
