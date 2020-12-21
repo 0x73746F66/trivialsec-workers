@@ -2,7 +2,6 @@ before_script:
   - aws --version
   - pylint --version
   - pip --version
-  - make common
 
 stages:
   - test
@@ -15,7 +14,10 @@ lint:
   tags:
     - python
   stage: test
+  variables:
+    COMMON_VERSION: 0.1.4
   script:
+    - make common
     - pip install -q -r docker/requirements.txt
     - make lint
   only:
