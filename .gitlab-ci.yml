@@ -15,6 +15,7 @@ variables:
   COST_CENTER: saas
   PRIV_KEY_NAME: trivialsec-prod
   SECURITY_GROUP_IDS: sg-04a8dac724adcad3c sg-01bbdeecc61359d59 sg-0b37a6d2e9a6ae0e8
+  NUM_INSTANCES: $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Worker" --query 'Reservations[].Instances[]' | jq '. | length')
 
 before_script:
   - aws --version
@@ -68,7 +69,6 @@ deploy:
     - python
   stage: deploy
   script:
-    - NUM_INSTANCES=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=Worker" --query 'Reservations[].Instances[]' | jq '. | length')
     - echo NUM_INSTANCES ${NUM_INSTANCES}
     - ./deploy/launch.sh
   only:
