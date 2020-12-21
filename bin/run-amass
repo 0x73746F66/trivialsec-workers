@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+report=$1
+log_file=$2
+config_filepath=$3
+
+if [[ -z "${log_file}" ]]; then echo log_file path argument not set; exit 1; fi
+if [[ -z "${report}" ]]; then echo report path argument not set; exit 1; fi
+if [[ -z "${config_filepath}" ]]; then echo config_filepath path argument not set; exit 1; fi
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/srv/app/lib
+cd /tmp
+if [[ -f ${report} ]]; then rm ${report}; fi
+if [[ ! -f ${config_filepath} ]]; then
+    echo file missing ${config_filepath}
+    exit 1
+fi
+
+start_time="$(date -u +%s)"
+amass enum -config ${config_filepath} -json ${report} -log ${log_file} -nocolor 2>&1 | tee -a ${log_file} /tmp/application.log
+
+end_time="$(date -u +%s)"
+elapsed="$(($end_time-$start_time))"
+echo "Total of $elapsed seconds elapsed for process"

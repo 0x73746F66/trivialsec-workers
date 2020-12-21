@@ -1,0 +1,397 @@
+import importlib
+import re
+from datetime import datetime
+from retry.api import retry
+from trivialsec.helpers.log_manager import logger
+from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, QueueData
+from trivialsec.models import ServiceType, Notification, JobRun, JobRuns, Domain, DomainStat, DomainStats, Finding, SecurityAlert, KnownIp, DnsRecord, Program, UpdateTable
+from worker.sockets import send_event
+
+
+class WorkerInterface:
+    config = None
+    domain: Domain = None
+    job: JobRun = None
+    report_template_types = {
+        'findings': Finding,
+        'security_alerts': SecurityAlert,
+        'known_ips': KnownIp,
+        'dns_records': DnsRecord,
+        'domains': Domain,
+        'domain_stats': DomainStats,
+        'programs': Program,
+        'updates': UpdateTable,
+    }
+    report = {
+        'findings': [],
+        'security_alerts': [],
+        'known_ips': [],
+        'dns_records': [],
+        'domains': [],
+        'domain_stats': [],
+        'programs': [],
+        'updates': [],
+    }
+
+    def __init__(self, job: JobRun, config: dict):
+        if isinstance(job, JobRun):
+            self.job = job
+        if isinstance(config, dict):
+            self.config = config
+        if hasattr(job.queue_data, 'target'):
+            self.domain = Domain(
+                name=job.queue_data.target,
+                project_id=job.project_id
+            )
+            if self.domain.exists(['name', 'project_id']):
+                self.domain.hydrate()
+
+    def analyse_report(self):
+        "Some final tasks after everything else has finished"
+        pass
+
+    def validate_report(self) -> bool:
+        result = False
+        for index, model in self.report_template_types.items():
+            if index not in self.report:
+                logger.info(f'validate_report: {index} not a key in report object')
+                continue
+            if not isinstance(self.report[index], list):
+                logger.warning(f'validate_report: {index} is not a list')
+                continue
+            logger.info(f'Found {len(self.report[index])} {model} in report')
+            for item in self.report[index]:
+                if not isinstance(item, model):
+                    logger.warning(f'validate_report: item is not of type {model}')
+                    continue
+                result = True # at least 1 match found
+
+        return result
+
+    def _save_findings(self, findings: list):
+        for finding in findings:
+            finding.account_id = self.job.account_id
+            finding.project_id = self.job.project_id
+            finding.is_passive = self.job.queue_data.is_passive
+            finding.service_type_id = self.job.queue_data.service_type_id
+            finding.verification_state = Finding.VERIFY_UNKNOWN
+            finding.workflow_state = Finding.WORKFLOW_NEW
+            finding.state = Finding.STATE_ACTIVE
+            exists_params = [
+                ('project_id', finding.project_id),
+                ('finding_detail_id', finding.finding_detail_id),
+            ]
+            if finding.domain_id:
+                exists_params.append(('domain_id', finding.domain_id))
+            exists = finding.exists(exists_params)
+            if exists:
+                old_finding = Finding(finding_id=finding.finding_id)
+                old_finding.hydrate()
+                finding.severity_normalized = old_finding.severity_normalized
+                finding.verification_state = old_finding.verification_state
+                finding.workflow_state = old_finding.workflow_state
+                finding.state = old_finding.state
+                finding.created_at = old_finding.created_at
+                finding.updated_at = old_finding.updated_at
+                finding.defer_to = old_finding.defer_to
+                finding.archived = old_finding.archived
+            finding.last_observed_at = datetime.utcnow().isoformat()
+            finding.persist(exists=exists)
+
+    def _save_security_alerts(self, security_alerts: list):
+        for security_alert in security_alerts:
+            security_alert.account_id = self.job.account_id
+            exists_params = []
+            if security_alert.security_alert_id:
+                exists_params.append(('security_alert_id', security_alert.security_alert_id))
+            else:
+                exists_params.extend([
+                    ('account_id', security_alert.account_id),
+                    ('type', security_alert.type)
+                ])
+
+            exists = security_alert.exists(exists_params)
+            security_alert.last_observed_at = datetime.utcnow().isoformat()
+            security_alert.persist(exists=exists)
+
+    def _save_domain_stats(self, domain_stats: list):
+        for domain_stat in domain_stats:
+            exists_params = []
+            if domain_stat.domain_stats_id:
+                exists_params.append(('domain_stats_id', domain_stat.domain_stats_id))
+            else:
+                exists_params.extend([
+                    ('domain_id', domain_stat.domain_id),
+                    ('domain_stat', domain_stat.domain_stat)
+                ])
+
+            exists = domain_stat.exists(exists_params)
+            domain_stat.created_at = datetime.utcnow().isoformat()
+            domain_stat.persist(exists=exists)
+
+    def _save_programs(self, programs: list):
+        for program in programs:
+            program.account_id = self.job.account_id
+            program.project_id = self.job.project_id
+            checks = [('name', program.name), ('source_description', program.source_description)]
+            if program.domain_id:
+                checks.append(('domain_id', program.domain_id))
+            if not program.version:
+                ver_expr = r'(?:(\d+\.(?:\d+\.)*\d+))'
+                matches = re.findall(ver_expr, program.name)
+                if matches:
+                    program.version = matches[0]
+            if program.version:
+                checks.append(('version', program.version))
+
+            exists = program.exists(checks)
+            if exists:
+                old_program = Program(program_id=program.program_id)
+                old_program.hydrate()
+                program.created_at = old_program.created_at
+            program.last_checked = datetime.utcnow().isoformat()
+            program.persist(exists=exists)
+
+    def _save_domains(self, domains: list):
+        for domain in domains:
+            if domain.name in ('localhost', self.domain.name) or domain.name.endswith('.arpa'):
+                continue
+
+            domain.account_id = self.job.account_id
+            domain.project_id = self.job.project_id
+            domain.enabled = False
+            exists = domain.exists(['name', 'project_id'])
+            if exists:
+                original_domain = Domain(domain_id=domain.domain_id)
+                original_domain.hydrate()
+                if not domain.created_at:
+                    domain.created_at = original_domain.created_at
+                if not domain.enabled:
+                    domain.enabled = original_domain.enabled
+                if not domain.schedule:
+                    domain.schedule = original_domain.schedule
+                if not domain.screenshot:
+                    domain.screenshot = original_domain.screenshot
+                if not domain.source:
+                    domain.source = original_domain.source
+                if not domain.parent_domain_id:
+                    domain.parent_domain_id = original_domain.parent_domain_id
+            domain.deleted = False
+            domain.updated_at = datetime.utcnow()
+            if domain.name.endswith(self.domain.name):
+                domain.parent_domain_id = self.domain.domain_id
+
+            if domain.persist(exists=exists):
+                Notification(
+                    account_id=self.job.account_id,
+                    description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
+                    url=f'/domain/{domain.domain_id}'
+                ).persist()
+                queue_job(self.job, 'metadata', domain.name)
+                queue_job(self.job, 'drill', self.domain.name)
+                domain_dict = {}
+                for col in domain.cols():
+                    domain_dict[col] = getattr(domain, col)
+
+                send_event('domain_changes', {
+                    'socket_key': self.job.account.socket_key,
+                    'project_tracking_id': self.job.queue_data.tracking_id,
+                    'domain': domain_dict,
+                })
+
+    def _save_known_ips(self, known_ips: list):
+        for known_ip in known_ips:
+            if known_ip.ip_address in ('127.0.0.1', '::1', '0:0:0:0:0:0:0:1'):
+                continue
+
+            known_ip.account_id = self.job.account_id
+            known_ip.project_id = self.job.project_id
+            exists_params = ['project_id', 'ip_address']
+            if known_ip.domain_id:
+                exists_params.append('domain_id')
+            exists = known_ip.exists(exists_params)
+            if exists:
+                known_ip.updated_at = datetime.utcnow()
+            if is_valid_ipv4_address(known_ip.ip_address):
+                known_ip.ip_version = 'ipv4'
+            elif is_valid_ipv6_address(known_ip.ip_address):
+                known_ip.ip_version = 'ipv6'
+            known_ip.persist(exists=exists)
+
+    def _save_dns_records(self, dns_records: list):
+        for dns_record in dns_records:
+            if dns_record.answer in ('127.0.0.1', '::1', '0:0:0:0:0:0:0:1'):
+                continue
+            if not dns_record.domain_id:
+                logger.warning(f'domain_id missing from dns_record {dns_record.raw}')
+                continue
+            exists = dns_record.exists(['domain_id', 'raw'])
+            if dns_record.raw and not exists:
+                dns_record.last_checked = datetime.utcnow()
+                dns_record.persist(exists=exists)
+                dns_dict = {}
+                for col in dns_record.cols():
+                    dns_dict[col] = getattr(dns_record, col)
+                send_event('dns_changes', {
+                    'socket_key': self.job.account.socket_key,
+                    'project_tracking_id': self.job.queue_data.tracking_id,
+                    'dns': dns_dict,
+                })
+
+            if dns_record.resource.upper() in ['A', 'AAAA']:
+                known_ip = KnownIp(ip_address=dns_record.answer)
+                answer_ok = False
+                if is_valid_ipv4_address(dns_record.answer):
+                    answer_ok = True
+                    known_ip.ip_version = 'ipv4'
+                elif is_valid_ipv6_address(dns_record.answer):
+                    answer_ok = True
+                    known_ip.ip_version = 'ipv6'
+                if answer_ok:
+                    if not known_ip.source:
+                        known_ip.source = f'DNS {dns_record.raw}'
+                    known_ip.domain_id = dns_record.domain_id
+                    known_ip.account_id = self.job.account_id
+                    known_ip.project_id = self.job.project_id
+                    ip_exists = known_ip.exists(['account_id', 'ip_address'])
+                    if ip_exists:
+                        known_ip.updated_at = datetime.utcnow()
+                    known_ip.persist(exists=ip_exists)
+                    ip_dict = {}
+                    for col in known_ip.cols():
+                        ip_dict[col] = getattr(known_ip, col)
+                    send_event('ip_changes', {
+                        'socket_key': self.job.account.socket_key,
+                        'project_tracking_id': self.job.queue_data.tracking_id,
+                        'ip_address': ip_dict,
+                    })
+
+    def _save_update_fields(self, updates: list):
+        for update_table in updates:
+            update_table.persist()
+
+    def save_report(self) -> bool:
+        if 'findings' in self.report:
+            self._save_findings(self.report['findings'])
+        if 'security_alerts' in self.report:
+            self._save_security_alerts(self.report['security_alerts'])
+        if 'programs' in self.report:
+            self._save_programs(self.report['programs'])
+        if 'domains' in self.report:
+            self._save_domains(self.report['domains'])
+        if 'known_ips' in self.report:
+            self._save_known_ips(self.report['known_ips'])
+        if 'dns_records' in self.report:
+            self._save_dns_records(self.report['dns_records'])
+        if 'updates' in self.report:
+            self._save_update_fields(self.report['updates'])
+        if 'domain_stats' in self.report:
+            self._save_domain_stats(self.report['domain_stats'])
+
+        return True
+
+    def get_result_filename(self) -> str:
+        "returns path for worker command output file"
+        pass
+
+    def get_log_filename(self) -> str:
+        "returns path for worker command log file"
+        pass
+
+    def get_job_exe_path(self) -> str:
+        "returns path for worker command"
+        pass
+
+    def pre_job_exe(self) -> bool:
+        "returns True when validations pass"
+        pass
+
+    def get_exe_args(self) -> list:
+        "returns a list of arguments to pass to work command"
+        pass
+
+    def post_job_exe(self) -> bool:
+        "returns True when successful command verification passes"
+        pass
+
+    def build_report(self, cmd_output: str, log_output: str) -> bool:
+        "returns data to persist"
+        pass
+
+    def get_archive_files(self) -> dict:
+        "returns file name amd paths of files to send to S3"
+        pass
+
+    def build_report_summary(self, output: str, log_output: str) -> str:
+        "returns a human readable summary"
+        pass
+
+def update_state(job: JobRun, state: str, message: str = None):
+    if message is not None:
+        job.worker_message = message
+    job.updated_at = datetime.utcnow().isoformat()
+    job.state = state
+    update_job(job)
+
+def update_job(job: JobRun) -> bool:
+    logger.info(f'update_job state {job.state} Job {job.job_run_id} Worker {job.worker_id} Service {job.node_id}')
+    job.persist(invalidations=[
+        f'job_runs/{job.queue_data.target}'
+    ])
+    send_event('update_job_state', {
+        'project_tracking_id': job.tracking_id,
+        'id': job.job_run_id,
+        'account_id': job.account_id,
+        'queue_data': job.queue_data,
+        'state': job.state,
+        'service_category': job.service_type.category,
+        'worker_message': job.worker_message,
+        'created': job.created_at if not isinstance(job.created_at, datetime) else job.created_at.isoformat(),
+        'started': job.started_at if not isinstance(job.started_at, datetime) else job.started_at.isoformat(),
+        'updated': job.updated_at if not isinstance(job.updated_at, datetime) else job.updated_at.isoformat(),
+        'completed': job.completed_at if not isinstance(job.completed_at, datetime) else job.completed_at.isoformat(),
+        'socket_key': job.account.socket_key
+    })
+
+    return True
+
+def handle_error(err, job: JobRun):
+    if isinstance(err, Exception):
+        logger.exception(err)
+    else:
+        logger.error(err)
+    update_state(job, ServiceType.STATE_ERROR, err)
+    Notification(
+        account_id=job.account_id,
+        description=f'Job {job.queue_data.service_type_category} failed',
+        url='/app'
+    ).persist()
+
+def queue_job(original_job: JobRuns, name: str, target: str = None):
+    target = target or original_job.queue_data.target
+    service_type = ServiceType(name=name)
+    service_type.hydrate(['name'])
+    job_runs = JobRuns()
+    job_runs.query_json([
+        ('service_type_id', service_type.service_type_id),
+        ('state', ['queued', 'starting', 'processing', 'finalising']),
+        ('$.target', target),
+    ])
+    if len(job_runs) == 0:
+        new_job_run = JobRun(
+            account_id=original_job.account_id,
+            project_id=original_job.project_id,
+            tracking_id=original_job.queue_data.tracking_id,
+            service_type_id=service_type.service_type_id,
+            queue_data=str(QueueData(
+                scan_type=original_job.queue_data.scan_type,
+                tracking_id=original_job.queue_data.tracking_id,
+                service_type_id=service_type.service_type_id,
+                service_type_name=service_type.name,
+                service_type_category=service_type.category,
+                target=target
+            )),
+            state=ServiceType.STATE_QUEUED,
+            priority=0
+        )
+        new_job_run.persist()

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+target=$1
+report=$2
+ua=$3
+if [[ -z "${target}" ]]; then echo target not set; exit 1; fi
+if [[ -z "${report}" ]]; then echo report not set; exit 1; fi
+if [[ -z "${ua}" ]]; then
+    ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.18 (KHTML, like Gecko) Version/8.0.3 Safari/600.3.18'
+fi
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/srv/app/lib
+cd /tmp
+if [[ -f ${report} ]]; then rm ${report}; fi
+
+nmap -sS ${target}/32 -oG - | \
+nikto.pl \
+    -evasion A \
+    -Format csv \
+    -nointeractive \
+    -output ${report} \
+    -Plugins @@ALL \
+    -C all \
+    -ssl 443 \
+    -useragent "${ua}" \
+    -ask no \
+    -host -
+
+exit 0
+
+

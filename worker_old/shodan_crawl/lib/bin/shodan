@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+import logging, datetime, re, json, urllib3, argparse
+from shodan import Shodan
+from shodan.exception import APIError
+from retry.api import retry
+from config import config, default
+from helpers import get_ip_address, log
+
+
+@retry((urllib3.exceptions.ProtocolError, urllib3.exceptions.ConnectionError, TimeoutError), tries=15, delay=1.5, backoff=3, logger=log)
+def main(opts):
+    if not opts.ipv4 and not opts.ipv6:
+        ip_str = get_ip_address(opts.domain_name)
+    else:
+        ip_str = opts.ipv4 if opts.ipv4 else opts.ipv6
+
+    api = Shodan(config.shodan_api_key)
+    log.info(f'Checking Shodan for {opts.domain_name}')
+    try:
+        r = api.host(ip_str)
+    except APIError:
+        return
+    shodan_obj = {
+        'domain': opts.domain_name,
+        'ip_str': ip_str
+    }
+    if r:
+        for field in ['last_update', 'country_code', 'country_name', 'latitude', 'longitude']:
+            if field in r:
+                if isinstance(r[field], datetime):
+                    shodan_obj[field] = r[field].isoformat()
+                else:
+                    shodan_obj[field] = r[field]
+        if 'ports' in r and 'data' in r and len(r['ports']) > 0:
+            shodan_obj['scans'] = []
+            for data in r['data']:
+                module = data['_shodan']['module']
+                raw = None
+                if module in data:
+                    raw = data[module]
+                shodan_obj['scans'].append({
+                    'crawler': 'shodan',
+                    'crawler_id': data['_shodan']['id'],
+                    'port': int(data['port']),
+                    'module': module,
+                    'transport': data['transport'],
+                    'raw': raw,
+                    'response': data['data'],
+                    'ptr': None if not 'ptr' in data['_shodan'] else data['_shodan']['ptr'],
+                    'isp': None if not 'isp' in data else data['isp'],
+                    'asn': None if not 'asn' in data else data['asn']
+                })
+
+    return shodan_obj
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-4', '--ipv4', help='ipv4 address', dest='ipv4', default=None)
+    parser.add_argument('-6', '--ipv6', help='ipv6 address', dest='ipv6', default=None)
+    parser.add_argument('-d', '--domain', help='fully qualified domain name', dest='domain_name', required=True)
+    parser.add_argument('-r', '--report', help='absolute path to report file', dest='report_path', required=True)
+    parser.add_argument('-l', '--log', help='absolute path to log file', dest='log_path', required=True)
+
+    args = parser.parse_args()
+    main(args)
