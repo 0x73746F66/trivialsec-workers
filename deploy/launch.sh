@@ -125,10 +125,22 @@ if [[ "${existingImageId}" == ami-* ]]; then
     aws ec2 deregister-image --image-id ${existingImageId}
 fi
 setup_ssh ${privateIp}
+set +x
+i=0
+echo '-------------------------------------------'
+echo Baking AMI
 while ! [ $(ssh -4 ec2 'echo `[ -f .deployed ]` $?' || echo 1) -eq 0 ]
 do
+    if [[ $(( $i % 5 )) -ne 0 ]]; then
+        ssh -4 ec2 'tail -n5 /var/log/user-data.log'
+    fi
     sleep 2
+    ((i=i+1))
 done
+echo
+echo Baking DONE!
+echo '-------------------------------------------'
+set -x
 scp -4 ec2:/var/log/user-data.log .
 cat user-data.log
 image_id=$(aws ec2 create-image --instance-id ${instanceId} --name ${ami_name} --description "Baked $(date +'%F %T')" --query 'ImageId' --output text)
@@ -139,7 +151,7 @@ if [[ ${image_id} != ami-* ]]; then
     echo AMI baking failed
     exit 1
 fi
-readonly app_tags="[{Key=Name,Value=App},{Key=Environment,Value=${TAG_ENV}},{Key=Purpose,Value=${TAG_PURPOSE}},{Key=cost-center,Value=${COST_CENTER}}]"
+readonly app_tags="[{Key=Name,Value=Worker},{Key=Environment,Value=${TAG_ENV}},{Key=Purpose,Value=${TAG_PURPOSE}},{Key=cost-center,Value=${COST_CENTER}}]"
 declare -a results=\($(aws ec2 run-instances \
     --associate-public-ip-address \
     --image-id ${image_id} \
