@@ -1,13 +1,10 @@
 import os
 import errno
-import time
-import re
 import json
 from socket import getaddrinfo, AF_INET6, AF_INET
 from os import path, getcwd
-from datetime import datetime
-from trivialsec.models import JobRun, Domain, KnownIp
-from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, default
+from trivialsec.models import Domain, KnownIp
+from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
@@ -312,7 +309,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self) -> str:
+    def build_report_summary(self, output: str, log_output: str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["domains"]) > 0:

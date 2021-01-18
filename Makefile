@@ -2,6 +2,7 @@ SHELL := /bin/bash
 -include .env
 export $(shell sed 's/=.*//' .env)
 APP_NAME = worker
+LOCAL_CACHE = /tmp/trivialsec
 
 .PHONY: help
 
@@ -23,11 +24,21 @@ prep:
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
 	find . -type d -name '__pycache__' -delete 2>/dev/null || true
 	find . -type f -name '*.DS_Store' -delete 2>/dev/null || true
+	@rm *.zip *.whl || true
+	@rm -rf build || true
+	@rm -f bin/openssl* || true
 
 common: prep
 	yes | pip uninstall -q trivialsec-common
 	aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
 	aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/build-${COMMON_VERSION}.zip build.zip
+	unzip -qo build.zip
+	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
+
+common-dev: prep ## Install trivialsec_common lib from local build
+	yes | pip uninstall -q trivialsec-common
+	cp -fu $(LOCAL_CACHE)/build.zip build.zip
+	cp -fu $(LOCAL_CACHE)/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
 	unzip -qo build.zip
 	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
 
@@ -70,7 +81,6 @@ restart: down run
 
 package: prep
 	mkdir -p build
-	rm -f build/$(APP_NAME).zip build/openssl.zip build/testssl.zip
 	zip -9rq build/$(APP_NAME).zip src bin -x '*.pyc' -x '__pycache__' -x '*.DS_Store'
 	zip -uj9q build/$(APP_NAME).zip docker/circus.ini docker/circusd-logger.yaml docker/requirements.txt
 	[ -f build/amass_linux_amd64.zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64.zip
@@ -97,11 +107,11 @@ package: prep
 	zip -uj9q build/testssl.zip build/testssl
 	rm -f bin/openssl*
 
-package-upload: package
+package-upload: package ## uploads distribution to s3
 	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://cloudformation-trivialsec/deploy-packages/$(APP_NAME)-$(COMMON_VERSION).zip
 	$(CMD_AWS) s3 cp build/openssl.zip s3://cloudformation-trivialsec/deploy-packages/openssl-$(COMMON_VERSION).zip
 	$(CMD_AWS) s3 cp build/testssl.zip s3://cloudformation-trivialsec/deploy-packages/testssl-$(COMMON_VERSION).zip
 	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://cloudformation-trivialsec/deploy-packages/amass_linux_amd64-$(COMMON_VERSION).zip
 
-package-dev: package
+package-dev: common-dev package
 	$(CMD_AWS) s3 cp --only-show-errors build/$(APP_NAME).zip s3://cloudformation-trivialsec/deploy-packages/$(APP_NAME)-dev-$(COMMON_VERSION).zip

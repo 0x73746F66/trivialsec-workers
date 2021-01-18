@@ -1,10 +1,11 @@
-import importlib
+import tldextract
 import re
 from datetime import datetime
 from retry.api import retry
 from trivialsec.helpers.log_manager import logger
-from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, QueueData
-from trivialsec.models import ServiceType, Notification, JobRun, JobRuns, Domain, DomainStat, DomainStats, Finding, SecurityAlert, KnownIp, DnsRecord, Program, UpdateTable
+from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
+from trivialsec.services.jobs import QueueData
+from trivialsec.models import ServiceType, Notification, JobRun, JobRuns, Domain, Domains, DomainStats, Finding, SecurityAlert, KnownIp, DnsRecord, Program, UpdateTable
 from worker.sockets import send_event
 
 
@@ -48,7 +49,6 @@ class WorkerInterface:
 
     def analyse_report(self):
         "Some final tasks after everything else has finished"
-        pass
 
     def validate_report(self) -> bool:
         result = False
@@ -95,6 +95,8 @@ class WorkerInterface:
                 finding.updated_at = old_finding.updated_at
                 finding.defer_to = old_finding.defer_to
                 finding.archived = old_finding.archived
+                if not finding.source_description:
+                    finding.source_description = old_finding.source_description
             finding.last_observed_at = datetime.utcnow().isoformat()
             finding.persist(exists=exists)
 
@@ -153,9 +155,27 @@ class WorkerInterface:
             program.persist(exists=exists)
 
     def _save_domains(self, domains: list):
+        utcnow = datetime.utcnow()
         for domain in domains:
             if domain.name in ('localhost', self.domain.name) or domain.name.endswith('.arpa'):
                 continue
+
+            ext = tldextract.extract(f'http://{domain.name}')
+            if ext.registered_domain != domain.name:
+                tld = Domain(
+                    name=ext.registered_domain,
+                    account_id=self.job.account_id,
+                    project_id=self.job.project_id,
+                    source=domain.source,
+                    created_at=utcnow,
+                    updated_at=utcnow,
+                    deleted=False,
+                    enabled=False
+                )
+                tld_exists = tld.exists(['name', 'project_id'])
+                if not tld_exists:
+                    tld.persist(exists=tld_exists)
+                domain.parent_domain_id = tld.domain_id
 
             domain.account_id = self.job.account_id
             domain.project_id = self.job.project_id
@@ -164,22 +184,14 @@ class WorkerInterface:
             if exists:
                 original_domain = Domain(domain_id=domain.domain_id)
                 original_domain.hydrate()
-                if not domain.created_at:
-                    domain.created_at = original_domain.created_at
-                if not domain.enabled:
-                    domain.enabled = original_domain.enabled
-                if not domain.schedule:
-                    domain.schedule = original_domain.schedule
-                if not domain.screenshot:
+                domain.source = original_domain.source
+                domain.created_at = original_domain.created_at
+                domain.enabled = original_domain.enabled
+                domain.schedule = original_domain.schedule
+                if domain.screenshot is None:
                     domain.screenshot = original_domain.screenshot
-                if not domain.source:
-                    domain.source = original_domain.source
-                if not domain.parent_domain_id:
-                    domain.parent_domain_id = original_domain.parent_domain_id
             domain.deleted = False
-            domain.updated_at = datetime.utcnow()
-            if domain.name.endswith(self.domain.name):
-                domain.parent_domain_id = self.domain.domain_id
+            domain.updated_at = utcnow
 
             if domain.persist(exists=exists):
                 Notification(
@@ -188,7 +200,7 @@ class WorkerInterface:
                     url=f'/domain/{domain.domain_id}'
                 ).persist()
                 queue_job(self.job, 'metadata', domain.name)
-                queue_job(self.job, 'drill', self.domain.name)
+                queue_job(self.job, 'drill', domain.name)
                 domain_dict = {}
                 for col in domain.cols():
                     domain_dict[col] = getattr(domain, col)
@@ -292,39 +304,30 @@ class WorkerInterface:
 
     def get_result_filename(self) -> str:
         "returns path for worker command output file"
-        pass
 
     def get_log_filename(self) -> str:
         "returns path for worker command log file"
-        pass
 
     def get_job_exe_path(self) -> str:
         "returns path for worker command"
-        pass
 
     def pre_job_exe(self) -> bool:
         "returns True when validations pass"
-        pass
 
     def get_exe_args(self) -> list:
         "returns a list of arguments to pass to work command"
-        pass
 
     def post_job_exe(self) -> bool:
         "returns True when successful command verification passes"
-        pass
 
     def build_report(self, cmd_output: str, log_output: str) -> bool:
         "returns data to persist"
-        pass
 
     def get_archive_files(self) -> dict:
         "returns file name amd paths of files to send to S3"
-        pass
 
     def build_report_summary(self, output: str, log_output: str) -> str:
         "returns a human readable summary"
-        pass
 
 def update_state(job: JobRun, state: str, message: str = None):
     if message is not None:

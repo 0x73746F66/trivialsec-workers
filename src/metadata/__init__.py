@@ -1,7 +1,6 @@
 import re
 from datetime import datetime
-from trivialsec.helpers.log_manager import logger
-from trivialsec.models import JobRun, Domain, DomainStat, Program
+from trivialsec.models import Domain, DomainStat, Program
 from worker import WorkerInterface, queue_job
 
 
@@ -33,7 +32,7 @@ class Worker(WorkerInterface):
     def post_job_exe(self) -> bool:
         return True
 
-    def build_report_summary(self) -> str:
+    def build_report_summary(self, output: str, log_output: str) -> str:
         return 'Updated metadata' if self.updated else 'No metadata'
 
     def build_report(self, cmd_output: str, log_output: str) -> bool:
@@ -56,7 +55,7 @@ class Worker(WorkerInterface):
 
         server_headers = ['x-powered-by', 'server']
         proxy_headers = ['via']
-        for header_name, header_value in self.domain._http_metadata.headers.items():
+        for header_name, header_value in self.domain._http_metadata.headers.items(): # pylint: disable=protected-access
             source_description = f'HTTP Header [{header_name}] of {self.domain.name}'
             if header_name in server_headers:
                 server_name, server_version = self.split_version(header_value)

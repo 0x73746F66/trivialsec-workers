@@ -1,7 +1,7 @@
 ---
 app:
   env: Prod
-  version: 20201220
+  version: 21.1.8
   log_file: /tmp/application.log
   log_level: WARNING
   frontend:

@@ -1,4 +1,4 @@
-from os import path, isatty, makedirs
+from os import path, makedirs
 from subprocess import Popen
 from datetime import datetime
 import errno
@@ -7,26 +7,30 @@ import time
 import importlib
 import sys
 import json
-from trivialsec import models, helpers
+from trivialsec.helpers.config import config
 from trivialsec.helpers.log_manager import logger
-from worker import WorkerInterface, update_state, handle_error
+from trivialsec.helpers import oneway_hash
+from trivialsec.services.jobs import QueueData
+from trivialsec.models import JobRun, ServiceType, JobRuns, Account, AccountConfig, Project
+from worker import update_state, handle_error
 from worker.cli import get_options, s3_upload
 from worker.sockets import close_socket
 
-options = get_options()
-logger.configure(log_level=options.get('log_level'))
-logger.create_stream_logger(colourise=isatty(2))
-logger.create_file_logger(file_path=options.get('log_file'))
 
-def handle_signals(job: models.JobRun):
+logger.configure(log_level=config.log_level)
+logger.create_stream_logger()
+logger.create_file_logger(file_path=config.log_file)
+options = get_options()
+
+def handle_signals(job: JobRun):
     def handler(signum, stack_frame):
         msg = f'Signal handler called with signal {signum}'
         logger.warning(msg)
         logger.debug(stack_frame)
         logger.info(f'Fetching job {job.job_run_id}')
-        if job.hydrate() and job.state not in [models.ServiceType.STATE_ERROR, models.ServiceType.STATE_COMPLETED]:
-            job.queue_data = helpers.QueueData(**json.loads(job.queue_data))
-            update_state(job, models.ServiceType.STATE_QUEUED if signum == 15 else models.ServiceType.STATE_ABORT, msg)
+        if job.hydrate() and job.state not in [ServiceType.STATE_ERROR, ServiceType.STATE_COMPLETED]:
+            job.queue_data = QueueData(**json.loads(job.queue_data))
+            update_state(job, ServiceType.STATE_QUEUED if signum == 15 else ServiceType.STATE_ABORT, msg)
         close_socket()
         sys.exit(0)
 
@@ -35,7 +39,7 @@ def handle_signals(job: models.JobRun):
     signal.signal(signal.SIGTSTP, handler) # ctrl+z
     signal.signal(signal.SIGINT, handler) # ctrl+c
 
-def process(job: models.JobRun, job_args: list) -> bool:
+def process(job: JobRun, job_args: list) -> bool:
     retcode = None
     logger.info(' '.join(job_args))
     try:
@@ -66,21 +70,21 @@ def mkpath(filepath: str):
         if exc.errno != errno.EEXIST:
             raise
 
-def complete_job(job: models.JobRuns, report_summary: str, queue_data_path: str, queue_data_object_path: str):
+def complete_job(job: JobRuns, report_summary: str, queue_data_path: str, queue_data_object_path: str):
     job.completed_at = datetime.utcnow().isoformat()
     job.queue_data.completed_at = job.completed_at
     job.queue_data.report_summary = report_summary[:255]
     with open(queue_data_path, 'w') as buff:
         buff.write(str(job.queue_data))
-    update_state(job, models.ServiceType.STATE_COMPLETED, job.queue_data.report_summary)
+    update_state(job, ServiceType.STATE_COMPLETED, job.queue_data.report_summary)
     s3_upload(
         queue_data_path,
         queue_data_object_path
     )
 
-def main(job: models.JobRun) -> bool:
+def main(job: JobRun) -> bool:
     try:
-        job_uuid = helpers.make_hash(''.join([str(job.job_run_id), str(job.worker_id), job.node_id])).replace('/', '')
+        job_uuid = oneway_hash(''.join([str(job.job_run_id), str(job.worker_id), job.node_id]))
         job.queue_data.job_uuid = job_uuid
         options['job_path'] = path.join(
             '/tmp',
@@ -117,11 +121,11 @@ def main(job: models.JobRun) -> bool:
         if not worker.pre_job_exe():
             msg = f'Failed pre_job_exe job {job.job_run_id}'
             handle_error(msg, job)
-            update_state(job, models.ServiceType.STATE_QUEUED, f'retrying job {job.job_run_id}')
+            update_state(job, ServiceType.STATE_QUEUED, f'retrying job {job.job_run_id}')
             return False
 
         for args in worker.get_exe_args():
-            update_state(job, models.ServiceType.STATE_PROCESSING, f'processing job {job.job_run_id}')
+            update_state(job, ServiceType.STATE_PROCESSING, f'processing job {job.job_run_id}')
             job_args = [job_exe_path]
             if report_path:
                 job_args.append(report_path)
@@ -133,7 +137,7 @@ def main(job: models.JobRun) -> bool:
                 msg = f'Failed processing job {" ".join(job_args)}'
                 handle_error(msg, job)
 
-            update_state(job, models.ServiceType.STATE_FINALISING)
+            update_state(job, ServiceType.STATE_FINALISING)
             if not worker.post_job_exe():
                 msg = f'Failed post_job_exe job {job.job_run_id}'
                 handle_error(msg, job)
@@ -155,7 +159,7 @@ def main(job: models.JobRun) -> bool:
                 return False
             logger.info(f'validate report {job.queue_data.target} {job.queue_data.service_type_category}')
             if not worker.validate_report():
-                complete_job(job, worker.build_report_summary(), queue_data_path, queue_data_object_path)
+                complete_job(job, worker.build_report_summary(output_file, log_output), queue_data_path, queue_data_object_path)
                 return True
 
             archive_files = worker.get_archive_files()
@@ -166,7 +170,7 @@ def main(job: models.JobRun) -> bool:
                     archive_file,
                     path.join(s3_path_prefix, job_uuid, archive_name),
                 )
-            logger.info(f'saving report {job.queue_data.target} {job.queue_data.service_type_category} {worker.build_report_summary()}')
+            logger.info(f'saving report {job.queue_data.target} {job.queue_data.service_type_category} {worker.build_report_summary(output_file, log_output)}')
             if not worker.save_report():
                 err = 'report was not saved to the database'
                 handle_error(err, job)
@@ -175,9 +179,9 @@ def main(job: models.JobRun) -> bool:
             logger.info(f'analyse report {job.queue_data.target} {job.queue_data.service_type_category}')
             worker.analyse_report()
             logger.info(f'completed {job.queue_data.target} {job.queue_data.service_type_category}')
-            complete_job(job, worker.build_report_summary(), queue_data_path, queue_data_object_path)
+            complete_job(job, worker.build_report_summary(output_file, log_output), queue_data_path, queue_data_object_path)
     except Exception as ex:
-        if not isinstance(job, models.JobRun):
+        if not isinstance(job, JobRun):
             raise
         handle_error(ex, job)
         return False
@@ -186,47 +190,47 @@ def main(job: models.JobRun) -> bool:
 
 if __name__ == "__main__":
     # Get service
-    current_service_type = models.ServiceType(name=options.get('service'))
+    current_service_type = ServiceType(name=options.get('service'))
     current_service_type.hydrate('name')
     # Find job
     logger.info(f'checking {current_service_type.name} queue for service {options.get("node_id")} worker {options.get("worker_id")}')
-    job_params = [('state', models.ServiceType.STATE_QUEUED), ('service_type_id', current_service_type.service_type_id)]
+    job_params = [('state', ServiceType.STATE_QUEUED), ('service_type_id', current_service_type.service_type_id)]
     if options.get('account_id') is not None:
         # validate plan
         job_params.append(('account_id', options.get('account_id')))
 
-    jobs: models.JobRuns = models.JobRuns().find_by(
+    jobs: JobRuns = JobRuns().find_by(
         job_params,
         order_by=['priority', 'DESC'],
         limit=1,
     )
-    if len(jobs) != 1 or not isinstance(jobs[0], models.JobRun):
+    if len(jobs) != 1 or not isinstance(jobs[0], JobRun):
         logger.info(f'{current_service_type.name} queue is empty')
         sys.exit(0)
 
-    current_job: models.JobRun = jobs[0]
+    current_job: JobRun = jobs[0]
     setattr(current_job, 'service_type', current_service_type)
     current_job.worker_id = options.get('worker_id')
     current_job.node_id = options.get('node_id')
     current_job.type_id = current_service_type.service_type_id
     current_job.started_at = datetime.utcnow().isoformat()
     current_job.updated_at = current_job.started_at
-    current_job.state = models.ServiceType.STATE_STARTING
+    current_job.state = ServiceType.STATE_STARTING
     data = json.loads(current_job.queue_data)
     data['worker_id'] = current_job.worker_id
     data['service_node_id'] = current_job.node_id
     data['started_at'] = current_job.started_at
-    current_job.queue_data: helpers.QueueData = helpers.QueueData(**data)
+    current_job.queue_data = QueueData(**data)
     current_job.persist()
-    account = models.Account(account_id=current_job.account_id)
+    account = Account(account_id=current_job.account_id)
     if not account.hydrate():
         handle_error(f'Error loading account {current_job.account_id}', current_job)
-    account_config = models.AccountConfig(account_id=current_job.account_id)
+    account_config = AccountConfig(account_id=current_job.account_id)
     if not account_config.hydrate():
         handle_error(f'Error loading account config {current_job.account_id}', current_job)
     setattr(account, 'config', account_config)
     setattr(current_job, 'account', account)
-    project = models.Project(project_id=current_job.project_id)
+    project = Project(project_id=current_job.project_id)
     if not project.hydrate():
         handle_error(f'Error loading project {current_job.project_id}', current_job)
     setattr(current_job, 'project', project)
@@ -236,7 +240,7 @@ if __name__ == "__main__":
         logger.info(f'Finished service {current_job.node_id} worker {current_job.worker_id}')
     except Exception as ex:
         logger.exception(ex)
-        update_state(current_job, models.ServiceType.STATE_ERROR, ex)
+        update_state(current_job, ServiceType.STATE_ERROR, ex)
 
     close_socket()
     sys.exit(0)

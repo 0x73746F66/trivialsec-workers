@@ -1,12 +1,6 @@
-import os
-import errno
-import time
-import re
-import json
 from os import path, getcwd
-from datetime import datetime
 from trivialsec.models import JobRun, Domain, KnownIp, DnsRecord
-from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, default, check_domain_rules
+from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 
 
 def get_result_filename(job: JobRun, config: dict) -> str:
@@ -53,7 +47,7 @@ def post_job_exe(job: JobRun, config: dict) -> bool:
 
     return True
 
-def build_report_summary(report: dict) -> str:
+def build_report_summary(report: dict, output: str, log_output: str) -> str:
     return f'Found {len(report["dns_records"])} dns records {len(report["domains"])} domains with {len(report["known_ips"])} IP Addresses'
 
 def build_report(job: JobRun, output: str, log_output: str, report: dict, config: dict) -> dict:
@@ -86,6 +80,6 @@ def build_report(job: JobRun, output: str, log_output: str, report: dict, config
                 resource=resource,
                 answer=answer,
                 raw=dns_record
-            ))            
+            ))
 
     return report

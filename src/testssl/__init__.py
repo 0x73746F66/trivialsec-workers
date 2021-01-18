@@ -1,14 +1,9 @@
-import os
-import errno
-import time
 import re
-import json
 from csv import reader
 from io import StringIO
 from os import path, getcwd
-from datetime import datetime
-from trivialsec.models import JobRun, Domain, DomainStat, Finding, FindingDetail, Program
-from trivialsec.helpers import make_hash, is_valid_ipv4_address, is_valid_ipv6_address, default, check_domain_rules, HTTPMetadata
+from trivialsec.models import Domain, Finding, FindingDetail, Program
+from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
@@ -63,7 +58,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self) -> str:
+    def build_report_summary(self, output: str, log_output: str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["findings"]) > 0:
@@ -80,7 +75,7 @@ class Worker(WorkerInterface):
 
         return summary
 
-    def build_report(self, output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output: str, log_output: str) -> bool:
         tls_tests = [ # match_text, bad test or title if good test, good
             ('Session Ticket RFC 5077 hint', 'no lifetime advertised', None, '96nX6l2Ee9sSmVg0e8KPa1u9fJL8tFirL6LVdyPplDg'),
             ('SSL Session ID support', None, 'no', '5GcfdkNtrLBU1ib..tTJ65af.goMx7RXV8ZUNxMj09M'),
@@ -130,7 +125,7 @@ class Worker(WorkerInterface):
             finding.evidence = openssl_evidence
             finding_detail = FindingDetail()
             finding_detail.title = pfs_not_supported
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -161,7 +156,7 @@ class Worker(WorkerInterface):
             finding.evidence = openssl_evidence
             finding_detail = FindingDetail()
             finding_detail.title = f'Insecure downgrade of deprecated protocol {client_tls} for {client_sim}'
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -199,7 +194,7 @@ class Worker(WorkerInterface):
             finding_detail.finding_detail_id = finding_detail_id
             if finding_detail.exists():
                 finding_detail.hydrate()
-                finding.source_description = finding_detail.description
+                finding.source_description = matched_term
                 finding.severity_normalized = finding_detail.severity_product
                 finding.finding_detail_id = finding_detail.finding_detail_id
                 self.report['findings'].append(finding)
@@ -228,7 +223,7 @@ class Worker(WorkerInterface):
 
             finding_detail = FindingDetail()
             finding_detail.title = f"{test} {bad}".strip()
-            finding_detail.finding_detail_id = make_hash(finding_detail.title) if finding_detail_id is None else finding_detail_id
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title) if finding_detail_id is None else finding_detail_id
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -265,7 +260,7 @@ class Worker(WorkerInterface):
 
             finding_detail = FindingDetail()
             finding_detail.title = f"{test} {bad}".strip()
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -330,7 +325,7 @@ class Worker(WorkerInterface):
                 san_domain.source = f'TLS Certificate of {self.domain.name}'
                 self.report['domains'].append(san_domain)
 
-        for row in reader(StringIO(output), delimiter=','):
+        for row in reader(StringIO(cmd_output), delimiter=','):
             finding_id = row[0].strip()
             test_target = row[1].strip()
             _, ip_addr = test_target.split('/')
@@ -386,7 +381,7 @@ class Worker(WorkerInterface):
                 else:
                     finding.evidence = http_header_evidence
 
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:

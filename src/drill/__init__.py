@@ -1,12 +1,7 @@
-import os
-import errno
-import time
-import re
-import json
 from os import path, getcwd
-from datetime import datetime
-from trivialsec.models import JobRun, Domain, KnownIp, DnsRecord, Finding, FindingDetail
-from trivialsec.helpers import make_hash, is_valid_ipv4_address, is_valid_ipv6_address, default, check_domain_rules, HTTPMetadata
+from trivialsec.models import Domain, KnownIp, DnsRecord, Finding, FindingDetail
+from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
+from trivialsec.helpers.transport import HTTPMetadata
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
@@ -271,7 +266,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self) -> str:
+    def build_report_summary(self, output: str, log_output: str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["dns_records"]) > 0:
@@ -284,8 +279,8 @@ class Worker(WorkerInterface):
             summary = f"Found {' '.join(summary_parts)}"
         return summary
 
-    def build_report(self, output: str, log_output: str) -> bool:
-        for dns_record_raw in output.splitlines():
+    def build_report(self, cmd_output: str, log_output: str) -> bool:
+        for dns_record_raw in cmd_output.splitlines():
             fqdn, ttl, dns_class, resource, *answer = dns_record_raw.split()
             answer = " ".join(answer)
             fqdn = fqdn.strip('.')
@@ -295,7 +290,7 @@ class Worker(WorkerInterface):
                 self.report['domains'].append(Domain(
                     name=fqdn,
                     project_id=self.job.project_id,
-                    source='DNS',
+                    source=f'DNS {self.domain.name}',
                 ))
 
             dns_record = DnsRecord(
@@ -312,8 +307,8 @@ class Worker(WorkerInterface):
             if dns_record.resource.upper() == 'CNAME':
                 domain_name = dns_record.answer if not dns_record.answer.endswith('.') else dns_record.answer[:-1]
                 if self.domain.name != domain_name and not domain_name.endswith('.arpa'):
-                    new_domain = Domain(name=domain_name)
-                    if not domain_name.endswith(self.domain.name):
+                    new_domain = Domain(name=domain_name, project_id=self.job.project_id)
+                    if domain_name.endswith(self.domain.name):
                         new_domain.parent_domain_id = self.domain.domain_id
                     new_domain.source = f'DNS {dns_record.raw}'
                     new_domain.enabled = False
@@ -362,7 +357,7 @@ class Worker(WorkerInterface):
             finding.evidence = f'dig CNAME {self.domain.name}'
             finding_detail = FindingDetail()
             finding_detail.title = f'Subdomain Takeover - {provider}'
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -391,7 +386,7 @@ class Worker(WorkerInterface):
             finding.evidence = f'dig NS {self.domain.name}'
             finding_detail = FindingDetail()
             finding_detail.title = f'DNS Hijacking - {provider}'
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
@@ -425,7 +420,7 @@ class Worker(WorkerInterface):
             finding.evidence = f'dig A {self.domain.name}\n{ip_addr} resolves for any customer of {provider}'
             finding_detail = FindingDetail()
             finding_detail.title = f'Second-order Subdomain Takeover - Broken Link Hijacking - {provider}'
-            finding_detail.finding_detail_id = make_hash(finding_detail.title)
+            finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
