@@ -207,7 +207,6 @@ class WorkerInterface:
 
                 send_event('domain_changes', {
                     'socket_key': self.job.account.socket_key,
-                    'project_tracking_id': self.job.queue_data.tracking_id,
                     'domain': domain_dict,
                 })
 
@@ -246,7 +245,6 @@ class WorkerInterface:
                     dns_dict[col] = getattr(dns_record, col)
                 send_event('dns_changes', {
                     'socket_key': self.job.account.socket_key,
-                    'project_tracking_id': self.job.queue_data.tracking_id,
                     'dns': dns_dict,
                 })
 
@@ -274,7 +272,6 @@ class WorkerInterface:
                         ip_dict[col] = getattr(known_ip, col)
                     send_event('ip_changes', {
                         'socket_key': self.job.account.socket_key,
-                        'project_tracking_id': self.job.queue_data.tracking_id,
                         'ip_address': ip_dict,
                     })
 
@@ -342,7 +339,6 @@ def update_job(job: JobRun) -> bool:
         f'job_runs/{job.queue_data.target}'
     ])
     send_event('update_job_state', {
-        'project_tracking_id': job.tracking_id,
         'id': job.job_run_id,
         'account_id': job.account_id,
         'queue_data': job.queue_data,
@@ -384,11 +380,9 @@ def queue_job(original_job: JobRuns, name: str, target: str = None):
         new_job_run = JobRun(
             account_id=original_job.account_id,
             project_id=original_job.project_id,
-            tracking_id=original_job.queue_data.tracking_id,
             service_type_id=service_type.service_type_id,
             queue_data=str(QueueData(
                 scan_type=original_job.queue_data.scan_type,
-                tracking_id=original_job.queue_data.tracking_id,
                 service_type_id=service_type.service_type_id,
                 service_type_name=service_type.name,
                 service_type_category=service_type.category,

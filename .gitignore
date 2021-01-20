@@ -87,3 +87,4 @@ cert_dot_sh/*.csv.part
 **/*.whl
 *.zip
 *.tar.gz
+dirhunt.json
