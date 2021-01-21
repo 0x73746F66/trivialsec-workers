@@ -159,6 +159,8 @@ class WorkerInterface:
         for domain in domains:
             if domain.name in ('localhost', self.domain.name) or domain.name.endswith('.arpa'):
                 continue
+            if domain.name.startswith('*.'):
+                domain.name = domain.name[2:]
 
             ext = tldextract.extract(f'http://{domain.name}')
             if ext.registered_domain != domain.name:
