@@ -163,13 +163,14 @@ def main(job: JobRun) -> bool:
                 return True
 
             archive_files = worker.get_archive_files()
-            for archive_name, archive_file in archive_files.items():
-                if not path.exists(archive_file):
-                    logger.warning(f'archive_file {archive_file} not found {job.queue_data.target} {job.queue_data.service_type_category}')
-                s3_upload(
-                    archive_file,
-                    path.join(s3_path_prefix, job_uuid, archive_name),
-                )
+            if archive_files:
+                for archive_name, archive_file in archive_files.items():
+                    if not path.exists(archive_file):
+                        logger.warning(f'archive_file {archive_file} not found {job.queue_data.target} {job.queue_data.service_type_category}')
+                    s3_upload(
+                        archive_file,
+                        path.join(s3_path_prefix, job_uuid, archive_name),
+                    )
             logger.info(f'saving report {job.queue_data.target} {job.queue_data.service_type_category} {worker.build_report_summary(output_file, log_output)}')
             if not worker.save_report():
                 err = 'report was not saved to the database'

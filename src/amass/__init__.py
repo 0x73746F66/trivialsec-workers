@@ -99,7 +99,7 @@ class Worker(WorkerInterface):
             'sitedossier',
         ]
         disabled = []
-        sources = self.config['amass'].get('sources')
+        sources = self.config['amass'].get('sources', {})
         for source, conf in sources.items():
             if source in open_data_sources:
                 amass_config.extend([
