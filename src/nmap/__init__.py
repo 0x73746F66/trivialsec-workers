@@ -1,5 +1,8 @@
 from os import path, getcwd
-from trivialsec.models import JobRun, Domain, KnownIp, DnsRecord
+from trivialsec.models.job_run import JobRun
+from trivialsec.models.domain import Domain
+from trivialsec.models.known_ip import KnownIp
+from trivialsec.models.dns_record import DnsRecord
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 
 

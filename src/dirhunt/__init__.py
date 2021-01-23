@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
-from trivialsec.models import Domain, DomainStat, Program
+from trivialsec.models.domain import Domain, DomainStat
+from trivialsec.models.program import Program
 from worker import WorkerInterface, queue_job
 
 

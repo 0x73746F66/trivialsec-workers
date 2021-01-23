@@ -3,7 +3,8 @@ import errno
 import json
 from socket import getaddrinfo, AF_INET6, AF_INET
 from os import path, getcwd
-from trivialsec.models import Domain, KnownIp
+from trivialsec.models.domain import Domain
+from trivialsec.models.known_ip import KnownIp
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface

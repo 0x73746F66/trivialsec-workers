@@ -2,7 +2,9 @@ import re
 from csv import reader
 from io import StringIO
 from os import path, getcwd
-from trivialsec.models import Domain, Finding, FindingDetail, Program
+from trivialsec.models.domain import Domain
+from trivialsec.models.finding import Finding, FindingDetail
+from trivialsec.models.program import Program
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface

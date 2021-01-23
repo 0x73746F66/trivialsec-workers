@@ -1,11 +1,19 @@
 import tldextract
 import re
 from datetime import datetime
-from retry.api import retry
 from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.services.jobs import QueueData
-from trivialsec.models import ServiceType, Notification, JobRun, JobRuns, Domain, Domains, DomainStats, Finding, SecurityAlert, KnownIp, DnsRecord, Program, UpdateTable
+from trivialsec.models import UpdateTable
+from trivialsec.models.service_type import ServiceType
+from trivialsec.models.notification import Notification
+from trivialsec.models.job_run import JobRun, JobRuns
+from trivialsec.models.domain import Domain, DomainStats
+from trivialsec.models.finding import Finding
+from trivialsec.models.security_alert import SecurityAlert
+from trivialsec.models.known_ip import KnownIp
+from trivialsec.models.dns_record import DnsRecord
+from trivialsec.models.program import Program
 from worker.sockets import send_event
 
 
@@ -214,7 +222,7 @@ class WorkerInterface:
 
     def _save_known_ips(self, known_ips: list):
         for known_ip in known_ips:
-            if known_ip.ip_address in ('127.0.0.1', '::1', '0:0:0:0:0:0:0:1'):
+            if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
                 continue
 
             known_ip.account_id = self.job.account_id
@@ -233,7 +241,7 @@ class WorkerInterface:
 
     def _save_dns_records(self, dns_records: list):
         for dns_record in dns_records:
-            if dns_record.answer in ('127.0.0.1', '::1', '0:0:0:0:0:0:0:1'):
+            if dns_record.answer in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
                 continue
             if not dns_record.domain_id:
                 logger.warning(f'domain_id missing from dns_record {dns_record.raw}')

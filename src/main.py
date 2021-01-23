@@ -11,7 +11,10 @@ from trivialsec.helpers.config import config
 from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers import oneway_hash
 from trivialsec.services.jobs import QueueData
-from trivialsec.models import JobRun, ServiceType, JobRuns, Account, AccountConfig, Project
+from trivialsec.models.job_run import JobRun, JobRuns
+from trivialsec.models.service_type import ServiceType
+from trivialsec.models.account import Account, AccountConfig
+from trivialsec.models.project import Project
 from worker import update_state, handle_error
 from worker.cli import get_options, s3_upload
 from worker.sockets import close_socket

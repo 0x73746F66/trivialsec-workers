@@ -1,5 +1,8 @@
 from os import path, getcwd
-from trivialsec.models import Domain, KnownIp, DnsRecord, Finding, FindingDetail
+from trivialsec.models.domain import Domain
+from trivialsec.models.known_ip import KnownIp
+from trivialsec.models.dns_record import DnsRecord
+from trivialsec.models.finding import Finding, FindingDetail
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 from trivialsec.helpers.transport import HTTPMetadata
 from trivialsec.helpers.log_manager import logger
