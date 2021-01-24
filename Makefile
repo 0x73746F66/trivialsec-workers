@@ -20,7 +20,7 @@ CMD_AWS += --region $(AWS_REGION)
 endif
 
 prep:
-	mkdir -p worker_datadir mysql_datadir redis_datadir
+	mkdir -p worker_datadir
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
 	find . -type d -name '__pycache__' -delete 2>/dev/null || true
 	find . -type f -name '*.DS_Store' -delete 2>/dev/null || true
