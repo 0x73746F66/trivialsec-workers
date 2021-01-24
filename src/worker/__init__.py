@@ -107,6 +107,13 @@ class WorkerInterface:
                     finding.source_description = old_finding.source_description
             finding.last_observed_at = datetime.utcnow().isoformat()
             finding.persist(exists=exists)
+            finding_dict = {}
+            for col in finding.cols():
+                finding_dict[col] = getattr(finding, col)
+            send_event('finding_changes', {
+                'socket_key': self.job.account.socket_key,
+                'finding': finding_dict,
+            })
 
     def _save_security_alerts(self, security_alerts: list):
         for security_alert in security_alerts:
@@ -123,6 +130,13 @@ class WorkerInterface:
             exists = security_alert.exists(exists_params)
             security_alert.last_observed_at = datetime.utcnow().isoformat()
             security_alert.persist(exists=exists)
+            alert_dict = {}
+            for col in security_alert.cols():
+                alert_dict[col] = getattr(security_alert, col)
+            send_event('security_alert', {
+                'socket_key': self.job.account.socket_key,
+                'alert': alert_dict,
+            })
 
     def _save_domain_stats(self, domain_stats: list):
         for domain_stat in domain_stats:
@@ -161,6 +175,13 @@ class WorkerInterface:
                 program.created_at = old_program.created_at
             program.last_checked = datetime.utcnow().isoformat()
             program.persist(exists=exists)
+            program_dict = {}
+            for col in program.cols():
+                program_dict[col] = getattr(program, col)
+            send_event('program_changes', {
+                'socket_key': self.job.account.socket_key,
+                'program': program_dict,
+            })
 
     def _save_domains(self, domains: list):
         utcnow = datetime.utcnow()
@@ -183,9 +204,21 @@ class WorkerInterface:
                     enabled=False
                 )
                 tld_exists = tld.exists(['name', 'project_id'])
+                domain.parent_domain_id = tld.domain_id
                 if not tld_exists:
                     tld.persist(exists=tld_exists)
-                domain.parent_domain_id = tld.domain_id
+                    Notification(
+                        account_id=self.job.account_id,
+                        description=f'Apex domain {tld.name} saved via {self.job.queue_data.service_type_category}',
+                        url=f'/domain/{tld.domain_id}'
+                    ).persist()
+                    tld_dict = {}
+                    for col in domain.cols():
+                        tld_dict[col] = getattr(tld, col)
+                    send_event('domain_changes', {
+                        'socket_key': self.job.account.socket_key,
+                        'domain': tld_dict,
+                    })
 
             domain.account_id = self.job.account_id
             domain.project_id = self.job.project_id
@@ -238,6 +271,13 @@ class WorkerInterface:
             elif is_valid_ipv6_address(known_ip.ip_address):
                 known_ip.ip_version = 'ipv6'
             known_ip.persist(exists=exists)
+            ip_dict = {}
+            for col in known_ip.cols():
+                ip_dict[col] = getattr(known_ip, col)
+            send_event('ipaddr_changes', {
+                'socket_key': self.job.account.socket_key,
+                'ipaddr': ip_dict,
+            })
 
     def _save_dns_records(self, dns_records: list):
         for dns_record in dns_records:
@@ -280,9 +320,9 @@ class WorkerInterface:
                     ip_dict = {}
                     for col in known_ip.cols():
                         ip_dict[col] = getattr(known_ip, col)
-                    send_event('ip_changes', {
+                    send_event('ipaddr_changes', {
                         'socket_key': self.job.account.socket_key,
-                        'ip_address': ip_dict,
+                        'ipaddr': ip_dict,
                     })
 
     def _save_update_fields(self, updates: list):
