@@ -318,12 +318,12 @@ class Worker(WorkerInterface):
                     self.report['domains'].append(new_domain)
 
             if is_valid_ipv4_address(fqdn) or is_valid_ipv6_address(fqdn):
-                known_ip = KnownIp(ip_address=fqdn, source=f'DNS {dns_record.raw}')
+                known_ip = KnownIp(ip_address=fqdn.strip(), source=f'DNS {dns_record.raw}')
                 if isinstance(self.domain, Domain):
                     known_ip.domain_id = self.domain.domain_id
                 self.report['known_ips'].append(known_ip)
             if is_valid_ipv4_address(answer) or is_valid_ipv6_address(answer):
-                known_ip = KnownIp(ip_address=answer, source=f'DNS {dns_record.raw}')
+                known_ip = KnownIp(ip_address=answer.strip(), source=f'DNS {dns_record.raw}')
                 if isinstance(self.domain, Domain):
                     known_ip.domain_id = self.domain.domain_id
                 self.report['known_ips'].append(known_ip)

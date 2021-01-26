@@ -340,13 +340,13 @@ class Worker(WorkerInterface):
             for address in result.get('addresses'):
                 address['source'] = result['source']
                 if is_valid_ipv4_address(address['ip']):
-                    ip_list.add(address['ip'])
+                    ip_list.add(address['ip'].strip())
                     if address['ip'] not in ip_dict:
-                        ip_dict[address['ip']] = address
+                        ip_dict[address['ip'].strip()] = address
                 if is_valid_ipv6_address(address['ip']):
-                    ip_list.add(address['ip'])
+                    ip_list.add(address['ip'].strip())
                     if address['ip'] not in ip_dict:
-                        ip_dict[address['ip']] = address
+                        ip_dict[address['ip'].strip()] = address
 
         for domain_name in domains:
             if self.domain.name == domain_name \
@@ -362,19 +362,19 @@ class Worker(WorkerInterface):
             try:
                 for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 443):
                     if family == AF_INET6:
-                        ip_list.add(sock_addr[0])
+                        ip_list.add(sock_addr[0].strip())
                     if family == AF_INET:
-                        ip_list.add(sock_addr[0])
-                    ip_dict[sock_addr[0]] = {}
+                        ip_list.add(sock_addr[0].strip())
+                    ip_dict[sock_addr[0].strip()] = {}
             except IOError:
                 pass
             try:
                 for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 80):
                     if family == AF_INET6:
-                        ip_list.add(sock_addr[0])
+                        ip_list.add(sock_addr[0].strip())
                     if family == AF_INET:
-                        ip_list.add(sock_addr[0])
-                    ip_dict[sock_addr[0]] = {}
+                        ip_list.add(sock_addr[0].strip())
+                    ip_dict[sock_addr[0].strip()] = {}
             except IOError:
                 pass
 

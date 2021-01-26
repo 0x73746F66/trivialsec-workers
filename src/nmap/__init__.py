@@ -71,9 +71,7 @@ def build_report(job: JobRun, output: str, log_output: str, report: dict, config
             domain = Domain()
 
         if is_valid_ipv4_address(fqdn) or is_valid_ipv6_address(fqdn):
-            report['known_ips'].append(KnownIp(ip_address=fqdn))
-        if is_valid_ipv4_address(job.queue_data.target) or is_valid_ipv6_address(job.queue_data.target):
-            report['known_ips'].append(KnownIp(ip_address=job.queue_data.target))
+            report['known_ips'].append(KnownIp(ip_address=fqdn.strip()))
 
         if domain.exists(['name', 'project_id']):
             report['dns_records'].append(DnsRecord(

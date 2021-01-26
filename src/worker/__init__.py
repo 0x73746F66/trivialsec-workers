@@ -260,9 +260,11 @@ class WorkerInterface:
 
             known_ip.account_id = self.job.account_id
             known_ip.project_id = self.job.project_id
-            exists_params = ['project_id', 'ip_address']
+            exists_params = ['ip_address']
             if known_ip.domain_id:
                 exists_params.append('domain_id')
+            else:
+                exists_params.append('account_id')
             exists = known_ip.exists(exists_params)
             if exists:
                 known_ip.updated_at = datetime.utcnow()
@@ -286,9 +288,9 @@ class WorkerInterface:
             if not dns_record.domain_id:
                 logger.warning(f'domain_id missing from dns_record {dns_record.raw}')
                 continue
+            dns_record.last_checked = datetime.utcnow()
             exists = dns_record.exists(['domain_id', 'raw'])
-            if dns_record.raw and not exists:
-                dns_record.last_checked = datetime.utcnow()
+            if dns_record.raw:
                 dns_record.persist(exists=exists)
                 dns_dict = {}
                 for col in dns_record.cols():
@@ -297,33 +299,6 @@ class WorkerInterface:
                     'socket_key': self.job.account.socket_key,
                     'dns': dns_dict,
                 })
-
-            if dns_record.resource.upper() in ['A', 'AAAA']:
-                known_ip = KnownIp(ip_address=dns_record.answer)
-                answer_ok = False
-                if is_valid_ipv4_address(dns_record.answer):
-                    answer_ok = True
-                    known_ip.ip_version = 'ipv4'
-                elif is_valid_ipv6_address(dns_record.answer):
-                    answer_ok = True
-                    known_ip.ip_version = 'ipv6'
-                if answer_ok:
-                    if not known_ip.source:
-                        known_ip.source = f'DNS {dns_record.raw}'
-                    known_ip.domain_id = dns_record.domain_id
-                    known_ip.account_id = self.job.account_id
-                    known_ip.project_id = self.job.project_id
-                    ip_exists = known_ip.exists(['account_id', 'ip_address'])
-                    if ip_exists:
-                        known_ip.updated_at = datetime.utcnow()
-                    known_ip.persist(exists=ip_exists)
-                    ip_dict = {}
-                    for col in known_ip.cols():
-                        ip_dict[col] = getattr(known_ip, col)
-                    send_event('ipaddr_changes', {
-                        'socket_key': self.job.account.socket_key,
-                        'ipaddr': ip_dict,
-                    })
 
     def _save_update_fields(self, updates: list):
         for update_table in updates:
