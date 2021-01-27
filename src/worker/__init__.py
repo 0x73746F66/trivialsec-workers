@@ -1,9 +1,11 @@
+from importlib import invalidate_caches
 import tldextract
 import re
 from datetime import datetime
 from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
-from trivialsec.services.jobs import QueueData
+from trivialsec.models.member import Member
+from trivialsec.services.jobs import QueueData, queue_job as service_queue_job
 from trivialsec.models import UpdateTable
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
@@ -192,7 +194,7 @@ class WorkerInterface:
                 domain.name = domain.name[2:]
 
             ext = tldextract.extract(f'http://{domain.name}')
-            if ext.registered_domain != domain.name:
+            if domain.parent_domain_id is None and ext.registered_domain != domain.name:
                 tld = Domain(
                     name=ext.registered_domain,
                     account_id=self.job.account_id,
@@ -236,7 +238,7 @@ class WorkerInterface:
             domain.deleted = False
             domain.updated_at = utcnow
 
-            if domain.persist(exists=exists):
+            if domain.persist(exists=exists, invalidations=[f'page_projects/{domain.account_id}']):
                 Notification(
                     account_id=self.job.account_id,
                     description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
@@ -401,19 +403,19 @@ def queue_job(original_job: JobRuns, name: str, target: str = None):
         ('state', ['queued', 'starting', 'processing', 'finalising']),
         ('$.target', target),
     ])
-    if len(job_runs) == 0:
-        new_job_run = JobRun(
-            account_id=original_job.account_id,
-            project_id=original_job.project_id,
-            service_type_id=service_type.service_type_id,
-            queue_data=str(QueueData(
-                scan_type=original_job.queue_data.scan_type,
-                service_type_id=service_type.service_type_id,
-                service_type_name=service_type.name,
-                service_type_category=service_type.category,
-                target=target
-            )),
-            state=ServiceType.STATE_QUEUED,
-            priority=0
-        )
-        new_job_run.persist()
+    if len(job_runs) > 0:
+        return
+
+    member = Member()
+    if original_job.queue_data.queued_by_member_id:
+        member.member_id = original_job.queue_data.queued_by_member_id
+        member.hydrate()
+
+    service_queue_job(
+        service_type=service_type,
+        member=member,
+        project=original_job.project,
+        priority=0,
+        params={'target': target},
+        on_demand=False
+    )

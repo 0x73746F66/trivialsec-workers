@@ -308,10 +308,10 @@ class Worker(WorkerInterface):
             self.report['dns_records'].append(dns_record)
 
             if dns_record.resource.upper() == 'CNAME':
-                domain_name = dns_record.answer if not dns_record.answer.endswith('.') else dns_record.answer[:-1]
+                domain_name = dns_record.answer.strip() if not dns_record.answer.endswith('.') else dns_record.answer[:-1].strip()
                 if self.domain.name != domain_name and not domain_name.endswith('.arpa'):
                     new_domain = Domain(name=domain_name, project_id=self.job.project_id)
-                    if domain_name.endswith(self.domain.name):
+                    if domain_name.endswith(self.domain.name) and not self.domain.name == domain_name:
                         new_domain.parent_domain_id = self.domain.domain_id
                     new_domain.source = f'DNS {dns_record.raw}'
                     new_domain.enabled = False

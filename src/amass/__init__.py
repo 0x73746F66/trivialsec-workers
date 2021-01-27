@@ -332,7 +332,7 @@ class Worker(WorkerInterface):
         for line in cmd_output.splitlines():
             result = json.loads(line)
             for domain_name in result['name'].splitlines():
-                domains.add(domain_name)
+                domains.add(domain_name.strip())
                 if domain_name not in domains_dict:
                     domains_dict[domain_name] = result
             if not isinstance(result.get('addresses'), list):
@@ -354,7 +354,7 @@ class Worker(WorkerInterface):
                 or domain_name.endswith('.arpa'):
                 continue
             new_domain = Domain(name=domain_name)
-            if not domain_name.endswith(self.domain.name):
+            if not domain_name.endswith(self.domain.name) and not self.domain.name == domain_name:
                 new_domain.parent_domain_id = self.domain.domain_id
             new_domain.source = ','.join(domains_dict[domain_name].get('sources'))
             new_domain.enabled = False

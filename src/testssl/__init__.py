@@ -317,12 +317,12 @@ class Worker(WorkerInterface):
                 full_match, *_ = match
                 if ' ' in full_match:
                     for part in full_match.split(' '):
-                        subject_alt_names.add(part)
+                        subject_alt_names.add(part.strip())
                 else:
-                    subject_alt_names.add(full_match)
+                    subject_alt_names.add(full_match.strip())
             for san_name in subject_alt_names:
                 san_domain = Domain(name=san_name)
-                if not san_name.endswith(self.domain.name):
+                if not san_name.endswith(self.domain.name) and not self.domain.name == san_name:
                     san_domain.parent_domain_id = self.domain.domain_id
                 san_domain.source = f'TLS Certificate of {self.domain.name}'
                 self.report['domains'].append(san_domain)
