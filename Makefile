@@ -30,17 +30,17 @@ prep:
 
 common: prep
 	yes | pip uninstall -q trivialsec-common
-	aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
-	aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/build-${COMMON_VERSION}.zip build.zip
+	aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
+	aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/build.zip build.zip
 	unzip -qo build.zip
-	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
+	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
 
-common-dev: prep ## Install trivialsec_common lib from local build
+common-dev: ## Install trivialsec_common lib from local build
 	yes | pip uninstall -q trivialsec-common
 	cp -fu $(LOCAL_CACHE)/build.zip build.zip
 	cp -fu $(LOCAL_CACHE)/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
 	unzip -qo build.zip
-	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
+	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
 
 install-dev: common
 	pip install -q -U pip setuptools pylint wheel awscli
@@ -49,10 +49,10 @@ install-dev: common
 lint:
 	pylint --jobs=0 --persistent=y --errors-only src/**/*.py
 
-build: prep package-dev ## Build compressed container
+build: package-dev ## Build compressed container
 	docker-compose build --compress
 
-buildnc: prep package-dev ## Clean build docker
+buildnc: package-dev ## Clean build docker
 	docker-compose build --no-cache --compress
 
 rebuild: down build
@@ -79,8 +79,9 @@ down: ## Stop the app
 
 restart: down run
 
-package: prep
+package:
 	mkdir -p build
+	@rm **/*.zip || true
 	zip -9rq build/$(APP_NAME).zip src bin -x '*.pyc' -x '__pycache__' -x '*.DS_Store'
 	zip -uj9q build/$(APP_NAME).zip docker/circus.ini docker/circusd-logger.yaml docker/requirements.txt
 	[ -f build/amass_linux_amd64.zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64.zip
@@ -107,11 +108,17 @@ package: prep
 	zip -uj9q build/testssl.zip build/testssl
 	rm -f bin/openssl*
 
-package-upload: package ## uploads distribution to s3
-	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://cloudformation-trivialsec/deploy-packages/$(APP_NAME)-$(COMMON_VERSION).zip
-	$(CMD_AWS) s3 cp build/openssl.zip s3://cloudformation-trivialsec/deploy-packages/openssl-$(COMMON_VERSION).zip
-	$(CMD_AWS) s3 cp build/testssl.zip s3://cloudformation-trivialsec/deploy-packages/testssl-$(COMMON_VERSION).zip
-	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://cloudformation-trivialsec/deploy-packages/amass_linux_amd64-$(COMMON_VERSION).zip
+package-upload: prep package ## uploads distribution to s3
+	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/$(APP_NAME).zip
+	$(CMD_AWS) s3 cp build/openssl.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/openssl.zip
+	$(CMD_AWS) s3 cp build/testssl.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/testssl.zip
+	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/amass_linux_amd64.zip
+
+package-dev-deps: package ## uploads distribution deps to s3
+	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/$(APP_NAME).zip
+	$(CMD_AWS) s3 cp build/openssl.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/openssl.zip
+	$(CMD_AWS) s3 cp build/testssl.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/testssl.zip
+	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/amass_linux_amd64.zip
 
 package-dev: common-dev package
-	$(CMD_AWS) s3 cp --only-show-errors build/$(APP_NAME).zip s3://cloudformation-trivialsec/deploy-packages/$(APP_NAME)-dev-$(COMMON_VERSION).zip
+	$(CMD_AWS) s3 cp --only-show-errors build/$(APP_NAME).zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/$(APP_NAME).zip

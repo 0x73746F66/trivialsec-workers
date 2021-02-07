@@ -18,7 +18,7 @@ class Worker(WorkerInterface):
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.domain.name}-{self.config.get("worker_id")}.json'))
+        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.config.get("worker_id")}.json'))
 
         return filename
 
@@ -26,7 +26,7 @@ class Worker(WorkerInterface):
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.domain.name}-{self.config.get("worker_id")}.log'))
+        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.config.get("worker_id")}.log'))
 
         return filename
 
@@ -41,7 +41,7 @@ class Worker(WorkerInterface):
         return path.realpath(path.join(getcwd(), 'lib', 'bin', 'run-amass'))
 
     def _make_conf_path(self) -> str:
-        return path.realpath(path.join(self.config['job_path'], f'{self.job.queue_data.scan_type}-{self.domain.name}.ini'))
+        return path.realpath(path.join(self.config['job_path'], f'{self.job.queue_data.scan_type}-{self.job.domain.name}.ini'))
 
     def pre_job_exe(self) -> bool:
         config_filepath = self._make_conf_path()
@@ -55,7 +55,7 @@ class Worker(WorkerInterface):
             f'maximum_dns_queries = {self.config["amass"].get("maximum_dns_queries", 20000)}',
             '[scope]',
             '[scope.domains]',
-            f'domain = {self.domain.name}',
+            f'domain = {self.job.domain.name}',
             '[resolvers]',
             f'public_dns_resolvers = {"true" if self.config["amass"].get("public_dns_resolvers") else "false"}',
             f'monitor_resolver_rate = {"true" if self.config["amass"].get("monitor_resolver_rate") else "false"}',
@@ -349,13 +349,13 @@ class Worker(WorkerInterface):
                         ip_dict[address['ip'].strip()] = address
 
         for domain_name in domains:
-            if self.domain.name == domain_name \
+            if self.job.domain.name == domain_name \
                 or domain_name.startswith('www.www.')\
                 or domain_name.endswith('.arpa'):
                 continue
             new_domain = Domain(name=domain_name)
-            if not domain_name.endswith(self.domain.name) and not self.domain.name == domain_name:
-                new_domain.parent_domain_id = self.domain.domain_id
+            if not domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
+                new_domain.parent_domain_id = self.job.domain.domain_id
             new_domain.source = ','.join(domains_dict[domain_name].get('sources'))
             new_domain.enabled = False
             self.report['domains'].append(new_domain)
@@ -380,7 +380,7 @@ class Worker(WorkerInterface):
 
         for ip_addr in ip_list:
             self.report['known_ips'].append(KnownIp(
-                domain_id=self.domain.domain_id,
+                domain_id=self.job.domain.domain_id,
                 ip_address=ip_addr,
                 source=ip_dict[ip_addr].get('source', 'DNS'),
                 asn_code=ip_dict[ip_addr].get('asn'),

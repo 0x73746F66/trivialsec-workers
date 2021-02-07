@@ -116,13 +116,13 @@ class Worker(WorkerInterface):
         pattern = re.compile('^\s(Start).+-->>\s((\d+\.+)+\d+:\d+).+(<<--)$', re.MULTILINE)
         matches = re.search(pattern, log_output)
         ip_addr, port = matches.group(2).split(':')
-        openssl_evidence = f'opensll s_client -cipher $pfs_cipher_list -connect {ip_addr}:{port} -servername {self.domain.name} </dev/null'
-        http_header_evidence = f'curl -sSL -D - {self.domain.name} -o /dev/null'
+        openssl_evidence = f'opensll s_client -cipher $pfs_cipher_list -connect {ip_addr}:{port} -servername {self.job.domain.name} </dev/null'
+        http_header_evidence = f'curl -sSL -D - {self.job.domain.name} -o /dev/null'
 
         pfs_not_supported = 'No ciphers supporting Forward Secrecy offered'
         if pfs_not_supported in log_output:
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = pfs_not_supported
             finding.evidence = openssl_evidence
             finding_detail = FindingDetail()
@@ -153,7 +153,7 @@ class Worker(WorkerInterface):
                 continue
 
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = f'{client_cipher} {client_detail}'
             finding.evidence = openssl_evidence
             finding_detail = FindingDetail()
@@ -189,7 +189,7 @@ class Worker(WorkerInterface):
             else:
                 continue
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.evidence = openssl_evidence
 
             finding_detail = FindingDetail()
@@ -219,7 +219,7 @@ class Worker(WorkerInterface):
                 continue
 
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = f'{test} {match}'
             finding.evidence = http_header_evidence
 
@@ -256,7 +256,7 @@ class Worker(WorkerInterface):
             else:
                 continue
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = f'{test} {match}'
             finding.evidence = evidence
 
@@ -295,7 +295,7 @@ class Worker(WorkerInterface):
                 continue
 
             program = Program()
-            program.domain_id = self.domain.domain_id
+            program.domain_id = self.job.domain.domain_id
             program.name = program_value
             if match_text == reverse_proxy_banner:
                 program.category = 'proxy'
@@ -303,7 +303,7 @@ class Worker(WorkerInterface):
                 program.category = 'server'
             elif match_text == application_banner:
                 program.category = 'application'
-            program.source_description = f'HTTP Header [{program.category}] of {self.domain.name}'
+            program.source_description = f'HTTP Header [{program.category}] of {self.job.domain.name}'
             self.report['programs'].append(program)
 
         san_matched = re.findall(r'(subjectAltName)(.*$)', log_output, re.MULTILINE)
@@ -322,9 +322,9 @@ class Worker(WorkerInterface):
                     subject_alt_names.add(full_match.strip())
             for san_name in subject_alt_names:
                 san_domain = Domain(name=san_name)
-                if not san_name.endswith(self.domain.name) and not self.domain.name == san_name:
-                    san_domain.parent_domain_id = self.domain.domain_id
-                san_domain.source = f'TLS Certificate of {self.domain.name}'
+                if not san_name.endswith(self.job.domain.name) and not self.job.domain.name == san_name:
+                    san_domain.parent_domain_id = self.job.domain.domain_id
+                san_domain.source = f'TLS Certificate of {self.job.domain.name}'
                 self.report['domains'].append(san_domain)
 
         for row in reader(StringIO(cmd_output), delimiter=','):
@@ -353,7 +353,7 @@ class Worker(WorkerInterface):
             if finding_id in ['unexpected result', 'skipping all HTTP checks', 'cipher_order', "couldn't connect", 'fallback_SCSV', 'proceeding with next IP (if any)']:
                 continue
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             source_description = f'{finding_desc} {hint}'.strip()
             if 'offered' in finding_desc:
                 source_description = f'{finding_id} {source_description}'
@@ -366,13 +366,13 @@ class Worker(WorkerInterface):
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'CVE'
-                finding.evidence = f'lynx --dump "https://www.ssllabs.com/ssltest/analyze.html?d={self.domain.name}&s={ip_addr}&hideResults=on"'
+                finding.evidence = f'lynx --dump "https://www.ssllabs.com/ssltest/analyze.html?d={self.job.domain.name}&s={ip_addr}&hideResults=on"'
             elif cwe:
                 finding_detail.title = cwe
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'CWE'
-                finding.evidence = f'lynx --dump "https://www.ssllabs.com/ssltest/analyze.html?d={self.domain.name}&s={ip_addr}&hideResults=on"'
+                finding.evidence = f'lynx --dump "https://www.ssllabs.com/ssltest/analyze.html?d={self.job.domain.name}&s={ip_addr}&hideResults=on"'
             else:
                 finding_detail.title = finding_id.strip()
                 finding_detail.type_namespace = 'Sensitive Data Identifications'

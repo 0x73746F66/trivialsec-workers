@@ -10,7 +10,7 @@ from trivialsec.models import UpdateTable
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
 from trivialsec.models.job_run import JobRun, JobRuns
-from trivialsec.models.domain import Domain, DomainStats
+from trivialsec.models.domain import Domain, DomainStat
 from trivialsec.models.finding import Finding
 from trivialsec.models.security_alert import SecurityAlert
 from trivialsec.models.known_ip import KnownIp
@@ -21,7 +21,6 @@ from worker.sockets import send_event
 
 class WorkerInterface:
     config = None
-    domain: Domain = None
     job: JobRun = None
     report_template_types = {
         'findings': Finding,
@@ -29,7 +28,7 @@ class WorkerInterface:
         'known_ips': KnownIp,
         'dns_records': DnsRecord,
         'domains': Domain,
-        'domain_stats': DomainStats,
+        'domain_stats': DomainStat,
         'programs': Program,
         'updates': UpdateTable,
     }
@@ -43,19 +42,22 @@ class WorkerInterface:
         'programs': [],
         'updates': [],
     }
+    invalidations = {
+        'findings': ['findings/finding_id/{finding_id}'],
+        'security_alerts': ['security_alerts/security_alert_id/{security_alert_id}'],
+        'known_ips': ['known_ips/known_ip_id/{known_ip_id}'],
+        'dns_records': ['dns_records/dns_record_id/{dns_record_id}'],
+        'domains': ['domains/domain_id/{domain_id}'],
+        'domain_stats': ['domain_stats/domain_id/{domain_id}'],
+        'programs': ['programs/program_id/{program_id}'],
+        'updates': [],
+    }
 
     def __init__(self, job: JobRun, config: dict):
         if isinstance(job, JobRun):
             self.job = job
         if isinstance(config, dict):
             self.config = config
-        if hasattr(job.queue_data, 'target'):
-            self.domain = Domain(
-                name=job.queue_data.target,
-                project_id=job.project_id
-            )
-            if self.domain.exists(['name', 'project_id']):
-                self.domain.hydrate()
 
     def analyse_report(self):
         "Some final tasks after everything else has finished"
@@ -80,6 +82,7 @@ class WorkerInterface:
 
     def _save_findings(self, findings: list):
         for finding in findings:
+            cache_keys = []
             finding.account_id = self.job.account_id
             finding.project_id = self.job.project_id
             finding.is_passive = self.job.queue_data.is_passive
@@ -95,6 +98,8 @@ class WorkerInterface:
                 exists_params.append(('domain_id', finding.domain_id))
             exists = finding.exists(exists_params)
             if exists:
+                for cache_key in self.invalidations['findings']:
+                    cache_keys.append(cache_key.format(finding_id=finding.finding_id))
                 old_finding = Finding(finding_id=finding.finding_id)
                 old_finding.hydrate()
                 finding.severity_normalized = old_finding.severity_normalized
@@ -108,7 +113,7 @@ class WorkerInterface:
                 if not finding.source_description:
                     finding.source_description = old_finding.source_description
             finding.last_observed_at = datetime.utcnow().isoformat()
-            finding.persist(exists=exists)
+            finding.persist(exists=exists, invalidations=cache_keys)
             finding_dict = {}
             for col in finding.cols():
                 finding_dict[col] = getattr(finding, col)
@@ -119,6 +124,7 @@ class WorkerInterface:
 
     def _save_security_alerts(self, security_alerts: list):
         for security_alert in security_alerts:
+            cache_keys = []
             security_alert.account_id = self.job.account_id
             exists_params = []
             if security_alert.security_alert_id:
@@ -130,8 +136,11 @@ class WorkerInterface:
                 ])
 
             exists = security_alert.exists(exists_params)
+            if exists:
+                for cache_key in self.invalidations['security_alerts']:
+                    cache_keys.append(cache_key.format(security_alert_id=security_alert.security_alert_id))
             security_alert.last_observed_at = datetime.utcnow().isoformat()
-            security_alert.persist(exists=exists)
+            security_alert.persist(exists=exists, invalidations=cache_keys)
             alert_dict = {}
             for col in security_alert.cols():
                 alert_dict[col] = getattr(security_alert, col)
@@ -142,6 +151,7 @@ class WorkerInterface:
 
     def _save_domain_stats(self, domain_stats: list):
         for domain_stat in domain_stats:
+            cache_keys = []
             exists_params = []
             if domain_stat.domain_stats_id:
                 exists_params.append(('domain_stats_id', domain_stat.domain_stats_id))
@@ -152,11 +162,14 @@ class WorkerInterface:
                 ])
 
             exists = domain_stat.exists(exists_params)
-            domain_stat.created_at = datetime.utcnow().isoformat()
-            domain_stat.persist(exists=exists)
+            if exists:
+                for cache_key in self.invalidations['domain_stats']:
+                    cache_keys.append(cache_key.format(domain_id=domain_stat.domain_id))
+            domain_stat.persist(exists=exists, invalidations=cache_keys)
 
     def _save_programs(self, programs: list):
         for program in programs:
+            cache_keys = []
             program.account_id = self.job.account_id
             program.project_id = self.job.project_id
             checks = [('name', program.name), ('source_description', program.source_description)]
@@ -172,11 +185,13 @@ class WorkerInterface:
 
             exists = program.exists(checks)
             if exists:
+                for cache_key in self.invalidations['programs']:
+                    cache_keys.append(cache_key.format(program_id=program.program_id))
                 old_program = Program(program_id=program.program_id)
                 old_program.hydrate()
                 program.created_at = old_program.created_at
             program.last_checked = datetime.utcnow().isoformat()
-            program.persist(exists=exists)
+            program.persist(exists=exists, invalidations=cache_keys)
             program_dict = {}
             for col in program.cols():
                 program_dict[col] = getattr(program, col)
@@ -188,7 +203,8 @@ class WorkerInterface:
     def _save_domains(self, domains: list):
         utcnow = datetime.utcnow()
         for domain in domains:
-            if domain.name in ('localhost', self.domain.name) or domain.name.endswith('.arpa'):
+            cache_keys = []
+            if domain.name in ('localhost', self.job.domain.name) or domain.name.endswith('.arpa'):
                 continue
             if domain.name.startswith('*.'):
                 domain.name = domain.name[2:]
@@ -212,7 +228,7 @@ class WorkerInterface:
                     Notification(
                         account_id=self.job.account_id,
                         description=f'Apex domain {tld.name} saved via {self.job.queue_data.service_type_category}',
-                        url=f'/domain/{tld.domain_id}'
+                        url=f'/app/domain/{tld.domain_id}'
                     ).persist()
                     tld_dict = {}
                     for col in domain.cols():
@@ -227,6 +243,8 @@ class WorkerInterface:
             domain.enabled = False
             exists = domain.exists(['name', 'project_id'])
             if exists:
+                for cache_key in self.invalidations['domains']:
+                    cache_keys.append(cache_key.format(domain_id=domain.domain_id))
                 original_domain = Domain(domain_id=domain.domain_id)
                 original_domain.hydrate()
                 domain.source = original_domain.source
@@ -237,12 +255,12 @@ class WorkerInterface:
                     domain.screenshot = original_domain.screenshot
             domain.deleted = False
             domain.updated_at = utcnow
-
-            if domain.persist(exists=exists, invalidations=[f'page_projects/{domain.account_id}']):
+            cache_keys.append(f'page_projects/{domain.account_id}')
+            if domain.persist(exists=exists, invalidations=cache_keys):
                 Notification(
                     account_id=self.job.account_id,
                     description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
-                    url=f'/domain/{domain.domain_id}'
+                    url=f'/app/domain/{domain.domain_id}'
                 ).persist()
                 queue_job(self.job, 'metadata', domain.name)
                 queue_job(self.job, 'drill', domain.name)
@@ -257,6 +275,7 @@ class WorkerInterface:
 
     def _save_known_ips(self, known_ips: list):
         for known_ip in known_ips:
+            cache_keys = []
             if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
                 continue
 
@@ -269,12 +288,14 @@ class WorkerInterface:
                 exists_params.append('account_id')
             exists = known_ip.exists(exists_params)
             if exists:
+                for cache_key in self.invalidations['known_ips']:
+                    cache_keys.append(cache_key.format(known_ip_id=known_ip.known_ip_id))
                 known_ip.updated_at = datetime.utcnow()
             if is_valid_ipv4_address(known_ip.ip_address):
                 known_ip.ip_version = 'ipv4'
             elif is_valid_ipv6_address(known_ip.ip_address):
                 known_ip.ip_version = 'ipv6'
-            known_ip.persist(exists=exists)
+            known_ip.persist(exists=exists, invalidations=cache_keys)
             ip_dict = {}
             for col in known_ip.cols():
                 ip_dict[col] = getattr(known_ip, col)
@@ -290,10 +311,18 @@ class WorkerInterface:
             if not dns_record.domain_id:
                 logger.warning(f'domain_id missing from dns_record {dns_record.raw}')
                 continue
+            cache_keys = []
             dns_record.last_checked = datetime.utcnow()
-            exists = dns_record.exists(['domain_id', 'raw'])
+            exists = dns_record.exists([
+                    'domain_id',
+                    'resource',
+                    'answer',
+                ])
+            if exists:
+                for cache_key in self.invalidations['dns_records']:
+                    cache_keys.append(cache_key.format(dns_record_id=dns_record.dns_record_id))
             if dns_record.raw:
-                dns_record.persist(exists=exists)
+                dns_record.persist(exists=exists, invalidations=cache_keys)
                 dns_dict = {}
                 for col in dns_record.cols():
                     dns_dict[col] = getattr(dns_record, col)
@@ -387,10 +416,15 @@ def handle_error(err, job: JobRun):
     else:
         logger.error(err)
     update_state(job, ServiceType.STATE_ERROR, err)
+    if hasattr(job, 'domain'):
+        url=f'/app/domain/{job.domain.domain_id}/jobs'
+    else:
+        url=f'/app/project/{job.project_id}'
+
     Notification(
         account_id=job.account_id,
         description=f'Job {job.queue_data.service_type_category} failed',
-        url='/app'
+        url=url,
     ).persist()
 
 def queue_job(original_job: JobRuns, name: str, target: str = None):

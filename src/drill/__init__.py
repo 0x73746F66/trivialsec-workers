@@ -287,13 +287,13 @@ class Worker(WorkerInterface):
             fqdn, ttl, dns_class, resource, *answer = dns_record_raw.split()
             answer = " ".join(answer)
             fqdn = fqdn.strip('.')
-            if self.domain.name != fqdn\
+            if self.job.domain.name != fqdn\
                 and not fqdn.endswith('.arpa')\
                 and check_domain_rules(fqdn):
                 self.report['domains'].append(Domain(
                     name=fqdn,
                     project_id=self.job.project_id,
-                    source=f'DNS {self.domain.name}',
+                    source=f'DNS {self.job.domain.name}',
                 ))
 
             dns_record = DnsRecord(
@@ -303,29 +303,29 @@ class Worker(WorkerInterface):
                 answer=answer,
                 raw=dns_record_raw
             )
-            if isinstance(self.domain, Domain):
-                dns_record.domain_id = self.domain.domain_id
+            if isinstance(self.job.domain, Domain):
+                dns_record.domain_id = self.job.domain.domain_id
             self.report['dns_records'].append(dns_record)
 
             if dns_record.resource.upper() == 'CNAME':
                 domain_name = dns_record.answer.strip() if not dns_record.answer.endswith('.') else dns_record.answer[:-1].strip()
-                if self.domain.name != domain_name and not domain_name.endswith('.arpa'):
+                if self.job.domain.name != domain_name and not domain_name.endswith('.arpa'):
                     new_domain = Domain(name=domain_name, project_id=self.job.project_id)
-                    if domain_name.endswith(self.domain.name) and not self.domain.name == domain_name:
-                        new_domain.parent_domain_id = self.domain.domain_id
+                    if domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
+                        new_domain.parent_domain_id = self.job.domain.domain_id
                     new_domain.source = f'DNS {dns_record.raw}'
                     new_domain.enabled = False
                     self.report['domains'].append(new_domain)
 
             if is_valid_ipv4_address(fqdn) or is_valid_ipv6_address(fqdn):
                 known_ip = KnownIp(ip_address=fqdn.strip(), source=f'DNS {dns_record.raw}')
-                if isinstance(self.domain, Domain):
-                    known_ip.domain_id = self.domain.domain_id
+                if isinstance(self.job.domain, Domain):
+                    known_ip.domain_id = self.job.domain.domain_id
                 self.report['known_ips'].append(known_ip)
             if is_valid_ipv4_address(answer) or is_valid_ipv6_address(answer):
                 known_ip = KnownIp(ip_address=answer.strip(), source=f'DNS {dns_record.raw}')
-                if isinstance(self.domain, Domain):
-                    known_ip.domain_id = self.domain.domain_id
+                if isinstance(self.job.domain, Domain):
+                    known_ip.domain_id = self.job.domain.domain_id
                 self.report['known_ips'].append(known_ip)
 
         for dns_record in self.report.get('dns_records'):
@@ -355,9 +355,9 @@ class Worker(WorkerInterface):
                 continue
 
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = metadata.dns_answer
-            finding.evidence = f'dig CNAME {self.domain.name}'
+            finding.evidence = f'dig CNAME {self.job.domain.name}'
             finding_detail = FindingDetail()
             finding_detail.title = f'Subdomain Takeover - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
@@ -384,9 +384,9 @@ class Worker(WorkerInterface):
                 continue
 
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = dns_record.raw
-            finding.evidence = f'dig NS {self.domain.name}'
+            finding.evidence = f'dig NS {self.job.domain.name}'
             finding_detail = FindingDetail()
             finding_detail.title = f'DNS Hijacking - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
@@ -411,16 +411,16 @@ class Worker(WorkerInterface):
                 continue
             if ignore_list and self._matches_in_list(ip_addr, ignore_list[0]):
                 continue
-            metadata = HTTPMetadata(url=f'https://{self.domain.name}')
+            metadata = HTTPMetadata(url=f'https://{self.job.domain.name}')
             metadata.verification_check()
             if str(metadata.code).startswith('2'):
                 continue
             if metadata.dns_answer:
-                logger.info(f'DNS {self.domain.name} {metadata.dns_answer}')
+                logger.info(f'DNS {self.job.domain.name} {metadata.dns_answer}')
             finding = Finding()
-            finding.domain_id = self.domain.domain_id
+            finding.domain_id = self.job.domain.domain_id
             finding.source_description = metadata.dns_answer or dns_record.raw
-            finding.evidence = f'dig A {self.domain.name}\n{ip_addr} resolves for any customer of {provider}'
+            finding.evidence = f'dig A {self.job.domain.name}\n{ip_addr} resolves for any customer of {provider}'
             finding_detail = FindingDetail()
             finding_detail.title = f'Second-order Subdomain Takeover - Broken Link Hijacking - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)

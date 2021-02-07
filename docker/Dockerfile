@@ -40,13 +40,13 @@ RUN mkdir -p /srv/app/lib /amass /openssl /tmp/testssl /testssl/etc && \
     yum clean metadata && \
     yum -q -y clean all && \
     rpm --quiet -U https://nmap.org/dist/nmap-7.91-1.x86_64.rpm && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/amass_linux_amd64-${COMMON_VERSION}.zip /tmp/trivialsec/amass_linux_amd64.zip && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/openssl-${COMMON_VERSION}.zip /tmp/trivialsec/openssl.zip && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/testssl-${COMMON_VERSION}.zip /tmp/trivialsec/testssl.zip && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/worker-dev-${COMMON_VERSION}.zip /tmp/trivialsec/worker.zip && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/amass_linux_amd64.zip /tmp/trivialsec/amass_linux_amd64.zip && \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/openssl.zip /tmp/trivialsec/openssl.zip && \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/testssl.zip /tmp/trivialsec/testssl.zip && \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/worker.zip /tmp/trivialsec/worker.zip && \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl \
         /srv/app/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl && \
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/build-${COMMON_VERSION}.zip /tmp/trivialsec/build.zip && \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/build.zip /tmp/trivialsec/build.zip && \
     unzip -qo /tmp/trivialsec/build.zip -d /srv/app && \
     unzip -qo /tmp/trivialsec/amass_linux_amd64.zip -d /amass && \
     unzip -qo /tmp/trivialsec/openssl.zip -d /openssl && \

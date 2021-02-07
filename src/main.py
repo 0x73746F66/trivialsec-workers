@@ -9,12 +9,13 @@ import sys
 import json
 from trivialsec.helpers.config import config
 from trivialsec.helpers.log_manager import logger
-from trivialsec.helpers import oneway_hash
+from trivialsec.helpers import check_domain_rules, oneway_hash
 from trivialsec.services.jobs import QueueData
 from trivialsec.models.job_run import JobRun, JobRuns
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.account import Account, AccountConfig
 from trivialsec.models.project import Project
+from trivialsec.models.domain import Domain
 from worker import update_state, handle_error
 from worker.cli import get_options, s3_upload
 from worker.sockets import close_socket
@@ -238,6 +239,14 @@ if __name__ == "__main__":
     if not project.hydrate():
         handle_error(f'Error loading project {current_job.project_id}', current_job)
     setattr(current_job, 'project', project)
+
+    if check_domain_rules(current_job.queue_data.target):
+        domain = Domain(
+            name=current_job.queue_data.target,
+            project_id=current_job.project_id,
+        )
+        if domain.hydrate(['name', 'project_id']):
+            setattr(current_job, 'domain', domain)
 
     try:
         main(current_job)

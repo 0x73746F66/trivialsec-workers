@@ -1,12 +1,12 @@
 #!/bin/bash -xe
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-export COMMON_VERSION=0.3.10
+export COMMON_VERSION=0.4.1
 
 function proxy_on() {
     local proxyPrivateAddr=proxy.trivialsec.local
     export http_proxy=http://${proxyPrivateAddr}:3128/
     export https_proxy=http://${proxyPrivateAddr}:3128/
-    export no_proxy=169.254.169.254,cloudformation-trivialsec.s3.amazonaws.com,s3.ap-southeast-2.amazonaws.com,ssm.ap-southeast-2.amazonaws.com,logs.ap-southeast-2.amazonaws.com,sts.amazonaws.com
+    export no_proxy=169.254.169.254,trivialsec-assets.s3.amazonaws.com,s3.ap-southeast-2.amazonaws.com,ssm.ap-southeast-2.amazonaws.com,logs.ap-southeast-2.amazonaws.com,sts.amazonaws.com
 }
 function proxy_off() {
     unset http_proxy
@@ -76,10 +76,10 @@ function install_mysql_client() {
 }
 function deploy_worker() {
     mkdir -p /srv/app/lib/bin
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/worker-${COMMON_VERSION}.zip /tmp/trivialsec/worker.zip
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl \
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/${COMMON_VERSION}/worker.zip /tmp/trivialsec/worker.zip
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl \
         /srv/app/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/build-${COMMON_VERSION}.zip /tmp/trivialsec/build.zip
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/${COMMON_VERSION}/build.zip /tmp/trivialsec/build.zip
     unzip -qo /tmp/trivialsec/worker.zip -d /tmp/trivialsec
     unzip -qo /tmp/trivialsec/build.zip -d /srv/app
     cp -nr /tmp/trivialsec/src/* /srv/app/
@@ -90,7 +90,7 @@ function deploy_worker() {
 }
 function install_amass() {
     mkdir -p /amass
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/amass_linux_amd64-${COMMON_VERSION}.zip /amass/amass_linux_amd64.zip
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/${COMMON_VERSION}/amass_linux_amd64.zip /amass/amass_linux_amd64.zip
     unzip -qo /amass/amass_linux_amd64.zip -d /amass
     chmod a+x /amass/amass_linux_amd64/amass
     cp -nr /amass/amass_linux_amd64/amass /usr/local/bin/amass
@@ -99,10 +99,10 @@ function install_amass() {
 }
 function install_testssl() {
     mkdir -p /testssl/etc
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/openssl-${COMMON_VERSION}.zip /tmp/trivialsec/openssl.zip
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/${COMMON_VERSION}/openssl.zip /tmp/trivialsec/openssl.zip
     unzip -qo /tmp/trivialsec/openssl.zip -d /tmp/trivialsec/openssl
     mv -f /tmp/trivialsec/openssl/bin/openssl /usr/bin/openssl
-    aws s3 cp --only-show-errors s3://cloudformation-trivialsec/deploy-packages/testssl-${COMMON_VERSION}.zip /tmp/trivialsec/testssl.zip
+    aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/${COMMON_VERSION}/testssl.zip /tmp/trivialsec/testssl.zip
     unzip -qo /tmp/trivialsec/testssl.zip -d /tmp/trivialsec/testssl
     mv -nf /tmp/trivialsec/testssl/testssl /testssl/testssl
     mv -nf /tmp/trivialsec/testssl/* /testssl/etc/
