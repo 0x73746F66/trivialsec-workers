@@ -115,6 +115,10 @@ class Worker(WorkerInterface):
         ]
         pattern = re.compile('^\s(Start).+-->>\s((\d+\.+)+\d+:\d+).+(<<--)$', re.MULTILINE)
         matches = re.search(pattern, log_output)
+        if matches is None:
+            logger.warning(log_output)
+            return True
+
         ip_addr, port = matches.group(2).split(':')
         openssl_evidence = f'opensll s_client -cipher $pfs_cipher_list -connect {ip_addr}:{port} -servername {self.job.domain.name} </dev/null'
         http_header_evidence = f'curl -sSL -D - {self.job.domain.name} -o /dev/null'
