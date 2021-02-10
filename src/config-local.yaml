@@ -4,6 +4,9 @@ app:
   version: 21.2.01
   log_file: /tmp/application.log
   log_level: DEBUG
+  website:
+    site_scheme: "file://"
+    site_domain: /mnt/nvme/trivialsec/website/src/index.html
   frontend:
     site_scheme: "http://"
     site_domain: localhost:5000
@@ -84,12 +87,30 @@ amass:
     add_numbers: true
   sources_minimum_ttl: 1440
   sources:
+    anubis:
+      name: Anubis
+      disabled: false
+      ttl: 10080
     alienvault:
       name: AlienVault
       disabled: false
       ttl: 10080
+    archivetoday:
+      name: ArchiveToday
+      disabled: false
+      ttl: 10080
+    ask:
+      name: Ask
+      disabled: true
+    baidu:
+      name: Baidu
+      disabled: true
     binaryedge:
       name: BinaryEdge
+      disabled: false
+      ttl: 10080
+    bgpview:
+      name: BGPView
       disabled: false
       ttl: 10080
     bufferover:
@@ -104,8 +125,16 @@ amass:
       name: C99
       disabled: false
       ttl: 4320
+    commoncrawl:
+      name: CommonCrawl
+      disabled: false
+      ttl: 4320
     censys:
       name: Censys
+      disabled: false
+      ttl: 10080
+    certspotter:
+      name: CertSpotter
       disabled: false
       ttl: 10080
     chaos:
@@ -143,21 +172,30 @@ amass:
       name: HackerTarget
       disabled: false
       ttl: 4320
+    mnemonic:
+      name: Mnemonic
+      disabled: false
+      ttl: 10080
     networksdb:
       name: NetworksDB
       disabled: false
       ttl: 10080
-    recondev:
-      name: ReconDev
-      disabled: false
     passivetotal:
       name: PassiveTotal
+      disabled: false
+      ttl: 10080
+    pastebin:
+      name: Pastebin
       disabled: false
       ttl: 10080
     rapiddns:
       name: RapidDNS
       disabled: false
       ttl: 4320
+    recondev:
+      name: ReconDev
+      disabled: false
+      ttl: 10080
     riddler:
       name: Riddler
       disabled: false
@@ -174,10 +212,30 @@ amass:
       name: SiteDossier
       disabled: false
       ttl: 4320
+    sonarsearch:
+      name: SonarSearch
+      disabled: false
+      ttl: 10080
     spyse:
       name: Spyse
       disabled: false
       ttl: 4320
+    sublist3rapi:
+      name: Sublist3rAPI
+      disabled: false
+      ttl: 4320
+    threatbook: # not in account_config table yet
+      name: ThreatBook
+      disabled: true
+      ttl: 10080
+    threatcrowd:
+      name: ThreatCrowd
+      disabled: false
+      ttl: 10080
+    threatminer:
+      name: ThreatMiner
+      disabled: false
+      ttl: 10080
     twitter:
       name: Twitter
       disabled: false
@@ -190,14 +248,25 @@ amass:
       name: URLScan
       disabled: false
       ttl: 10080
+    viewdns:
+      name: ViewDNS
+      disabled: false
+      ttl: 10080
     virustotal:
       name: VirusTotal
+      disabled: false
+      ttl: 10080
+    wayback:
+      name: Wayback
       disabled: false
       ttl: 10080
     whoisxml:
       name: WhoisXML
       disabled: false
       ttl: 10080
+    yahoo:
+      name: Yahoo
+      disabled: true
     zetalytics:
       name: ZETAlytics
       disabled: false

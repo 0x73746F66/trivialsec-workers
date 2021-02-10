@@ -90,27 +90,41 @@ class Worker(WorkerInterface):
             f'minimum_ttl = {self.config["amass"].get("sources_minimum_ttl", 1440)}'
         ])
         open_data_sources = [
+            'anubis',
+            'archivetoday',
+            'baidu',
+            'bgpview',
             'bufferover',
             'builtwith',
+            'commoncrawl',
+            'certspotter',
             'dnstable',
             'hackerone',
             'hackertarget',
+            'mnemonic',
+            'pastebin',
             'rapiddns',
+            'recondev',
             'riddler',
             'sitedossier',
+            'sonarsearch',
+            'sublist3rapi',
+            'threatcrowd',
+            'threatminer',
+            'viewdns',
+            'wayback',
+            'yahoo',
         ]
         disabled = []
         sources = self.config['amass'].get('sources', {})
         for source, conf in sources.items():
-            if source in open_data_sources:
+            if conf.get('disabled'):
+                disabled.append(conf.get('name'))
+            elif source in open_data_sources:
                 amass_config.extend([
                     f'[data_sources.{conf.get("name")}]',
                     f'ttl = {conf.get("ttl")}',
                 ])
-
-            if conf.get('disabled'):
-                disabled.append(conf.get('name'))
-
         if len(disabled) > 0:
             amass_config.append('[data_sources.disabled]')
             for data_source in disabled:

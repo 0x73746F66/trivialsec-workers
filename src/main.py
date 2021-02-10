@@ -31,7 +31,7 @@ def handle_signals(job: JobRun):
         msg = f'Signal handler called with signal {signum}'
         logger.warning(msg)
         logger.debug(stack_frame)
-        logger.info(f'Fetching job {job.job_run_id}')
+        logger.info(f'Fetching {job.queue_data.service_type_category}')
         if job.hydrate() and job.state not in [ServiceType.STATE_ERROR, ServiceType.STATE_COMPLETED]:
             job.queue_data = QueueData(**json.loads(job.queue_data))
             update_state(job, ServiceType.STATE_QUEUED if signum == 15 else ServiceType.STATE_ABORT, msg)
@@ -45,6 +45,7 @@ def handle_signals(job: JobRun):
 
 def process(job: JobRun, job_args: list) -> bool:
     retcode = None
+    error = 'Unknown'
     logger.info(' '.join(job_args))
     try:
         proc = Popen(job_args)
@@ -62,7 +63,7 @@ def process(job: JobRun, job_args: list) -> bool:
             proc.terminate()
 
     if retcode != 0:
-        handle_error(f'Job {job.job_run_id} exited with {retcode} {error}', job)
+        handle_error(f'Job {job.queue_data.service_type_category} exited with {retcode} {error}', job)
         return False
 
     return True
@@ -123,13 +124,13 @@ def main(job: JobRun) -> bool:
             mkpath(log_path)
         job_exe_path = worker.get_job_exe_path()
         if not worker.pre_job_exe():
-            msg = f'Failed pre_job_exe job {job.job_run_id}'
+            msg = f'Failed pre_job {job.queue_data.service_type_category}'
             handle_error(msg, job)
-            update_state(job, ServiceType.STATE_QUEUED, f'retrying job {job.job_run_id}')
+            update_state(job, ServiceType.STATE_QUEUED, f'retrying {job.queue_data.service_type_category}')
             return False
 
         for args in worker.get_exe_args():
-            update_state(job, ServiceType.STATE_PROCESSING, f'processing job {job.job_run_id}')
+            update_state(job, ServiceType.STATE_PROCESSING, f'processing {job.queue_data.service_type_category}')
             job_args = [job_exe_path]
             if report_path:
                 job_args.append(report_path)
@@ -143,7 +144,7 @@ def main(job: JobRun) -> bool:
 
             update_state(job, ServiceType.STATE_FINALISING)
             if not worker.post_job_exe():
-                msg = f'Failed post_job_exe job {job.job_run_id}'
+                msg = f'Failed post_job {job.queue_data.service_type_category}'
                 handle_error(msg, job)
                 return False
 

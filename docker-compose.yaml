@@ -38,6 +38,7 @@ services:
         aliases:
           - workers
     volumes:
+      # - ./worker_datadir:/tmp
       - ./bin:/srv/app/lib/bin
       - ./src/amass:/srv/app/amass
       - ./src/drill:/srv/app/drill
