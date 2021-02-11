@@ -14,70 +14,27 @@ class Worker(WorkerInterface):
     def __init__(self, job, config: dict):
         super().__init__(job, config)
 
-    def get_result_filename(self) -> str:
-        target = self.job.queue_data.target
-        filename = path.realpath(path.join(
-            self.config['job_path'],
-            self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.config.get("worker_id")}.csv',
-        ))
-
-        return filename
-
-    def get_log_filename(self) -> str:
-        return path.realpath(path.join(
-            self.config['job_path'],
-            self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.config.get("worker_id")}.log',
-        ))
-
-    def get_archive_files(self) -> dict:
-        return {
-            'output.csv': self.get_result_filename(),
-            'error.log': self.get_log_filename(),
-        }
-
     def get_job_exe_path(self) -> str:
-        return path.realpath(path.join(getcwd(), 'lib', 'bin', 'run-testssl'))
+        return 'date'
 
     def pre_job_exe(self) -> bool:
-        if is_valid_ipv4_address(self.job.queue_data.target) or is_valid_ipv6_address(self.job.queue_data.target):
-            return False
-
         return True
 
     def get_exe_args(self) -> list:
-        args = [self.job.queue_data.target]
-        # --bugs enables the "-bugs" option of s_client, needed e.g. for some buggy F5s
-        if self.job.queue_data.is_active:
-            args.append('-active')
-        return [args]
+        return []
 
     def post_job_exe(self) -> bool:
-        report_path = self.get_result_filename()
-        if not path.isfile(report_path):
-            raise ValueError(f'File not found {report_path}')
-
         return True
 
     def build_report_summary(self, output: str, log_output: str) -> str:
-        summary = 'Scan completed without any new results'
-        summary_parts = []
-        if len(self.report["findings"]) > 0:
-            summary_parts.append(f'{len(self.report["findings"])} issues')
-            if len(self.report["programs"]) > 0:
-                summary_parts.append(f' with {len(self.report["programs"])} programs')
-            if len(self.report["domains"]) > 0:
-                summary_parts.append(f' and {len(self.report["domains"])} domains')
-        if summary_parts:
-            summary = f"Found {''.join(summary_parts)}"
-
-        if len(self.report["findings"]) > 0:
-            summary = f'Found {len(self.report["findings"])} issues'
+        summary = 'Empty Report Generated'
+        if len(self.report["reports"]) > 0:
+            summary = 'Generated Report'
 
         return summary
 
     def build_report(self, cmd_output: str, log_output: str) -> bool:
+        findings = []
         tls_tests = [ # match_text, bad test or title if good test, good
             ('Session Ticket RFC 5077 hint', 'no lifetime advertised', None, '96nX6l2Ee9sSmVg0e8KPa1u9fJL8tFirL6LVdyPplDg'),
             ('SSL Session ID support', None, 'no', '5GcfdkNtrLBU1ib..tTJ65af.goMx7RXV8ZUNxMj09M'),
@@ -145,7 +102,7 @@ class Worker(WorkerInterface):
 
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
-            self.report['findings'].append(finding)
+            findings.append(finding)
 
         tls_ok = ['TLSv1.2', 'TLSv1.3']
         for match in re.findall(r'^\s(.+)\s(TLSv\d.\d)\s+([a-zA-Z0-9\-\_]+)\s+(.+)$', log_output):
@@ -176,7 +133,7 @@ class Worker(WorkerInterface):
 
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
-            self.report['findings'].append(finding)
+            findings.append(finding)
 
         for match_text, bad, good, finding_detail_id in tls_tests:
             matches = None
@@ -203,7 +160,7 @@ class Worker(WorkerInterface):
                 finding.source_description = matched_term
                 finding.severity_normalized = finding_detail.severity_product
                 finding.finding_detail_id = finding_detail.finding_detail_id
-                self.report['findings'].append(finding)
+                findings.append(finding)
             else:
                 logger.error(f'FindingDetails missing for {finding_detail_id} {match_text}')
 
@@ -243,7 +200,7 @@ class Worker(WorkerInterface):
 
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
-            self.report['findings'].append(finding)
+            findings.append(finding)
 
         for match_text, bad, good, evidence in extra_tests:
             matches = None
@@ -280,7 +237,7 @@ class Worker(WorkerInterface):
 
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
-            self.report['findings'].append(finding)
+            findings.append(finding)
 
         reverse_proxy_banner = 'Reverse Proxy banner'
         server_banner = 'Server banner'
@@ -408,12 +365,12 @@ class Worker(WorkerInterface):
 
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
-            self.report['findings'].append(finding)
+            findings.append(finding)
 
-        return True
-
-    def _generate_json(self):
-        return {
+        self.report['reports'].append({
+            'Domain': domain_name,
+            'ipv4': ipv4,
+            'ipv6': ipv6,
             'Protocols': {
                 'SSL v2': None,
                 'SSL v3': None,
@@ -494,4 +451,5 @@ class Worker(WorkerInterface):
                 'Server Banner': None,
                 'Banner Application': None
             }
-        }
+        })
+        return True
