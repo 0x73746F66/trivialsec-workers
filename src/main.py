@@ -253,7 +253,7 @@ if __name__ == "__main__":
         main(current_job)
         logger.info(f'Finished service {current_job.node_id} worker {current_job.worker_id}')
     except Exception as ex:
-        logger.exception(ex)
+        logger.error(ex)
         update_state(current_job, ServiceType.STATE_ERROR, ex)
 
     close_socket()

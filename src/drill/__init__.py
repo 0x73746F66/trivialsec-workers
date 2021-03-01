@@ -1,216 +1,219 @@
 from os import path, getcwd
+from xml.etree import ElementTree
+import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.models.dns_record import DnsRecord
 from trivialsec.models.finding import Finding, FindingDetail
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
-from trivialsec.helpers.transport import HTTPMetadata
+from trivialsec.helpers.transport import Metadata
+from trivialsec.helpers.config import config
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
 
 class Worker(WorkerInterface):
     providers = [
-        ('.clients.turbobytes.net', 'TurboBytes',),
-        ('.turbobytes-cdn.com', 'TurboBytes',),
-        ('.afxcdn.net', 'afxcdn.net',),
-        ('.akamai.net', 'Akamai',),
-        ('.akamaiedge.net', 'Akamai',),
-        ('.akadns.net', 'Akamai',),
-        ('.akamaitechnologies.com', 'Akamai',),
-        ('.gslb.tbcache.com', 'Alimama',),
-        ('.cloudfront.net', 'Amazon Cloudfront',),
-        ('.s3-website-', 'Amazon S3 Website',),
-        ('.s3-website.', 'Amazon S3 Website',),
-        ('.s3.', 'Amazon S3 Bucket',),
-        ('.s3-accesspoint.', 'Amazon S3 Bucket',),
-        ('.anankecdn.com.br', 'Ananke',),
-        ('.att-dsa.net', 'AT&T',),
-        ('.azioncdn.net', 'Azion',),
-        ('.belugacdn.com', 'BelugaCDN',),
-        ('.bluehatnetwork.com', 'Blue Hat Network',),
-        ('.systemcdn.net', 'EdgeCast',),
-        ('.cachefly.net', 'Cachefly',),
-        ('.cdn77.net', 'CDN77',),
-        ('.cdn77.org', 'CDN77',),
-        ('.panthercdn.com', 'CDNetworks',),
-        ('.cdngc.net', 'CDNetworks',),
-        ('.gccdn.net', 'CDNetworks',),
-        ('.gccdn.cn', 'CDNetworks',),
-        ('.cdnify.io', 'CDNify',),
-        ('.ccgslb.com', 'ChinaCache',),
-        ('.ccgslb.net', 'ChinaCache',),
-        ('.c3cache.net', 'ChinaCache',),
-        ('.chinacache.net', 'ChinaCache',),
-        ('.c3cdn.net', 'ChinaCache',),
-        ('.lxdns.com', 'ChinaNetCenter',),
-        ('.speedcdns.com', 'QUANTIL/ChinaNetCenter',),
-        ('.mwcloudcdn.com', 'QUANTIL/ChinaNetCenter',),
-        ('.cloudflare.com', 'Cloudflare',),
-        ('.cloudflare.net', 'Cloudflare',),
-        ('.edgecastcdn.net', 'EdgeCast',),
-        ('.adn.', 'EdgeCast',),
-        ('.wac.', 'EdgeCast',),
-        ('.wpc.', 'EdgeCast',),
-        ('.fastly.net', 'Fastly',),
-        ('.fastlylb.net', 'Fastly',),
-        ('.google.', 'Google',),
-        ('googlesyndication.', 'Google',),
-        ('youtube.', 'Google',),
-        ('.googleusercontent.com', 'Google',),
-        ('.l.doubleclick.net', 'Google',),
-        ('d.gcdn.co', 'G-core',),
-        ('.hiberniacdn.com', 'Hibernia',),
-        ('.hwcdn.net', 'Highwinds',),
-        ('.incapdns.net', 'Incapsula',),
-        ('.inscname.net', 'Instartlogic',),
-        ('.insnw.net', 'Instartlogic',),
-        ('.internapcdn.net', 'Internap',),
-        ('.kxcdn.com', 'KeyCDN',),
-        ('.lswcdn.net', 'LeaseWeb CDN',),
-        ('.footprint.net', 'Level3',),
-        ('.llnwd.net', 'Limelight',),
-        ('.lldns.net', 'Limelight',),
-        ('.netdna-cdn.com', 'MaxCDN',),
-        ('.netdna-ssl.com', 'MaxCDN',),
-        ('.netdna.com', 'MaxCDN',),
-        ('.stackpathdns.com', 'StackPath',),
-        ('.mncdn.com', 'Medianova',),
-        ('.instacontent.net', 'Mirror Image',),
-        ('.mirror-image.net', 'Mirror Image',),
-        ('.cap-mii.net', 'Mirror Image',),
-        ('.rncdn1.com', 'Reflected Networks',),
-        ('.simplecdn.net', 'Simple CDN',),
-        ('.swiftcdn1.com', 'SwiftCDN',),
-        ('.swiftserve.com', 'SwiftServe',),
-        ('.gslb.taobao.com', 'Taobao',),
-        ('.cdn.bitgravity.com', 'Tata communications',),
-        ('.cdn.telefonica.com', 'Telefonica',),
-        ('.vo.msecnd.net', 'Windows Azure',),
-        ('.ay1.b.yahoo.com', 'Yahoo',),
-        ('.yimg.', 'Yahoo',),
-        ('.zenedge.net', 'Zenedge',),
-        ('.b-cdn.net', 'BunnyCDN',),
-        ('.ksyuncdn.com', 'Kingsoft',),
-        ('.stackpathcdn.', 'StackPath Edge',),
-        ('.herokuapp.', 'Heroku',),
-        ('.myshopify.com', 'Shopify',),
-        ('.azurewebsites.net', 'Azure App Service'),
-        ('.cloudapp.net', 'Azure App Service'),
-        ('.blob.core.windows.net', 'Azure Blob Storage'),
-        ('.web.core.windows.net', 'Azure static website'),
-        ('.netlify.app', 'Netlify'),
-        ('.hubspot.net', 'HubSpot'),
-        ('.github.io', 'GitHub Pages'),
-        ('.pythonanywhere.com', 'PythonAnywhere'),
-        ('.gitlab.io', 'Gitlab Pages'),
-        ('.section.io', 'section.io'),
-        ('.ghost.org', 'Ghost'),
-        ('.anvilapp.net', 'Anvil'),
-        ('.apphb.com', 'AppHarbor'),
+        ('.clients.turbobytes.net', 'TurboBytes', [], None),
+        ('.turbobytes-cdn.com', 'TurboBytes', [], None),
+        ('.afxcdn.net', 'afxcdn.net', [], None),
+        ('.akamai.net', 'Akamai', [], None),
+        ('.akamaiedge.net', 'Akamai', [], None),
+        ('.akadns.net', 'Akamai', [], None),
+        ('.akamaitechnologies.com', 'Akamai', [], None),
+        ('.gslb.tbcache.com', 'Alimama', [], None),
+        ('.cloudfront.net', 'Amazon Cloudfront', [], 'check_missing_bucket'),
+        ('.s3-website-', 'Amazon S3 Website', [], 'check_missing_bucket'),
+        ('.s3-website.', 'Amazon S3 Website', [], 'check_missing_bucket'),
+        ('.s3.', 'Amazon S3 Bucket', [], 'check_missing_bucket'),
+        ('.s3-accesspoint.', 'Amazon S3 Bucket', [], 'check_missing_bucket'),
+        ('.anankecdn.com.br', 'Ananke', [], None),
+        ('.att-dsa.net', 'AT&T', [], None),
+        ('.azioncdn.net', 'Azion', [], None),
+        ('.belugacdn.com', 'BelugaCDN', [], None),
+        ('.bluehatnetwork.com', 'Blue Hat Network', [], None),
+        ('.systemcdn.net', 'EdgeCast', [], None),
+        ('.cachefly.net', 'Cachefly', [], None),
+        ('.cdn77.net', 'CDN77', [], None),
+        ('.cdn77.org', 'CDN77', [], None),
+        ('.panthercdn.com', 'CDNetworks', [], None),
+        ('.cdngc.net', 'CDNetworks', [], None),
+        ('.gccdn.net', 'CDNetworks', [], None),
+        ('.gccdn.cn', 'CDNetworks', [], None),
+        ('.cdnify.io', 'CDNify', [], None),
+        ('.ccgslb.com', 'ChinaCache', [], None),
+        ('.ccgslb.net', 'ChinaCache', [], None),
+        ('.c3cache.net', 'ChinaCache', [], None),
+        ('.chinacache.net', 'ChinaCache', [], None),
+        ('.c3cdn.net', 'ChinaCache', [], None),
+        ('.lxdns.com', 'ChinaNetCenter', [], None),
+        ('.speedcdns.com', 'QUANTIL/ChinaNetCenter', [], None),
+        ('.mwcloudcdn.com', 'QUANTIL/ChinaNetCenter', [], None),
+        ('.cloudflare.com', 'Cloudflare', [], None),
+        ('.cloudflare.net', 'Cloudflare', [], None),
+        ('.edgecastcdn.net', 'EdgeCast', [], None),
+        ('.adn.', 'EdgeCast', [], None),
+        ('.wac.', 'EdgeCast', [], None),
+        ('.wpc.', 'EdgeCast', [], None),
+        ('.fastly.net', 'Fastly', [], None),
+        ('.fastlylb.net', 'Fastly', [], None),
+        ('.google.', 'Google', [], None),
+        ('googlesyndication.', 'Google', [], None),
+        ('youtube.', 'Google', [], None),
+        ('.googleusercontent.com', 'Google', [], None),
+        ('.l.doubleclick.net', 'Google', [], None),
+        ('d.gcdn.co', 'G-core', [], None),
+        ('.hiberniacdn.com', 'Hibernia', [], None),
+        ('.hwcdn.net', 'Highwinds', [], None),
+        ('.incapdns.net', 'Incapsula', [], None),
+        ('.inscname.net', 'Instartlogic', [], None),
+        ('.insnw.net', 'Instartlogic', [], None),
+        ('.internapcdn.net', 'Internap', [], None),
+        ('.kxcdn.com', 'KeyCDN', [], None),
+        ('.lswcdn.net', 'LeaseWeb CDN', [], None),
+        ('.footprint.net', 'Level3', [], None),
+        ('.llnwd.net', 'Limelight', [], None),
+        ('.lldns.net', 'Limelight', [], None),
+        ('.netdna-cdn.com', 'MaxCDN', [], None),
+        ('.netdna-ssl.com', 'MaxCDN', [], None),
+        ('.netdna.com', 'MaxCDN', [], None),
+        ('.stackpathdns.com', 'StackPath', [], None),
+        ('.mncdn.com', 'Medianova', [], None),
+        ('.instacontent.net', 'Mirror Image', [], None),
+        ('.mirror-image.net', 'Mirror Image', [], None),
+        ('.cap-mii.net', 'Mirror Image', [], None),
+        ('.rncdn1.com', 'Reflected Networks', [], None),
+        ('.simplecdn.net', 'Simple CDN', [], None),
+        ('.swiftcdn1.com', 'SwiftCDN', [], None),
+        ('.swiftserve.com', 'SwiftServe', [], None),
+        ('.gslb.taobao.com', 'Taobao', [], None),
+        ('.cdn.bitgravity.com', 'Tata communications', [], None),
+        ('.cdn.telefonica.com', 'Telefonica', [], None),
+        ('.vo.msecnd.net', 'Windows Azure', [], None),
+        ('.ay1.b.yahoo.com', 'Yahoo', [], None),
+        ('.yimg.', 'Yahoo', [], None),
+        ('.zenedge.net', 'Zenedge', [], None),
+        ('.b-cdn.net', 'BunnyCDN', [], None),
+        ('.ksyuncdn.com', 'Kingsoft', [], None),
+        ('.stackpathcdn.', 'StackPath Edge', [], None),
+        ('.herokuapp.', 'Heroku', [], None),
+        ('.myshopify.com', 'Shopify', [], None),
+        ('.azurewebsites.net', 'Azure App Service', [], None),
+        ('.cloudapp.net', 'Azure App Service', [], None),
+        ('.blob.core.windows.net', 'Azure Blob Storage', [], None),
+        ('.web.core.windows.net', 'Azure static website', [], None),
+        ('.netlify.app', 'Netlify', [], None),
+        ('.hubspot.net', 'HubSpot', [], None),
+        ('.github.io', 'GitHub Pages', [], None),
+        ('.pythonanywhere.com', 'PythonAnywhere', [], None),
+        ('.gitlab.io', 'Gitlab Pages', [], None),
+        ('.section.io', 'section.io', [], None),
+        ('.ghost.org', 'Ghost', [], None),
+        ('.anvilapp.net', 'Anvil', [], None),
+        ('.apphb.com', 'AppHarbor', [], None),
     ]
     managed_dns = [
-        ('.netdc.', 'NetDC',),
-        ('.ovh.', 'OVHcloud',),
-        ('.digitalocean.com', 'Digital Ocean',),
-        ('.awsdns-', 'Amazon Route 53', ['cloudfront.net']),
-        ('.akam.net', 'Akamai Edge DNS',),
-        ('.akadns.net', 'Akamai Edge DNS',),
-        ('.ak-adns.net', 'Akamai Edge DNS',),
-        ('.akamaiedge.net', 'Akamai Edge DNS',),
-        ('.akamaitech.net', 'Akamai',),
-        ('.akagtm.net', 'Akamai',),
-        ('.akamaistream.net', 'Akamai',),
-        ('.akamaihd.net', 'Akamai',),
-        ('.akamai.com', 'Akamai',),
-        ('.azure-dns.', 'Azure DNS',),
-        ('.cdnetworks.', 'CDNetworks',),
-        ('.googledomains.com', 'Google Cloud Platform',),
-        ('.cloudflare.', 'Cloudflare',),
-        ('.dnsimple.com', 'DNSimple',),
-        ('.mydyndns.', 'Dyn DNS',),
-        ('.dynect.net', 'Dyn DNS',),
-        ('.easydns.', 'easyDNS',),
-        ('.no-ip.', 'No-IP',),
-        ('.telindus.', 'Telindus',),
-        ('.ultradns.', 'UltraDNS',),
-        ('.verisign-grs.', 'Verisign',),
-        ('.verisign.', 'Verisign',),
-        ('.zonomi.com', 'Zonomi',),
-        ('.worldwidedns.net', 'WorldwideDNS',),
-        ('.uberns.', 'Total Uptime Technologies',),
-        ('.pointhq.com', 'PointDNS',),
-        ('.netriplex.', 'Netriplex',),
-        ('.loaddns.', 'LoadDNS',),
-        ('.glbs.me', 'GSLB.me',),
-        ('.geoscaling.', 'GeoScaling DNS2',),
-        ('.flexdns.', 'FlexDNS',),
-        ('.durabledns.', 'DurableDNS',),
-        ('.dnspod.', 'DNSPod',),
-        ('.linode.com', 'Linode',),
-        ('.csc.com', 'CSC',),
-        ('.name-s.net', 'CloudfloorDNS',),
-        ('.mtgsy.', 'CloudfloorDNS',),
-        ('.softlayer.', 'IBM Cloud',),
-        ('.stackpathdns.', 'Stackpath',),
-        ('.rackspace.', 'Rackspace',),
-        ('.dnspackage.', 'Premium DNS',),
-        ('.syrahost.', 'WordPress Hosting',),
-        ('.premium.exchange', 'Crazy Domains Exchange Manager',),
-        ('.bluehost.com', 'Bluehost',),
-        ('.siteground.biz', 'SiteGround',),
-        ('.zeit.world', 'Zeit',),
-        ('.zeit-world.', 'Zeit',),
-        ('.ipmanagerinc.', 'IPM.Domains',),
-        ('.domaincontrol.com', 'GoDaddy',),
-        ('.cloudns.net', 'ClouDNS',),
-        ('.dnsmadeeasy.com', 'DNSMadeEasy',),
-        ('.zilore.net', 'Zilore',),
-        ('.nsone.net', 'NS1',),
-        ('.oraclevcn.com', 'Oracle Cloud Infrastructure',),
-        ('.constellix.com', 'Constellix',),
-        ('.name-services.com', 'Namecheap Hosting',),
-        ('.registrar-servers.com', 'Namecheap Hosting',),
-        ('.namecheaphosting.com', 'Namecheap Hosting',),
-        ('.powerdns.net', 'PowerDNS',),
-        ('.zoneedit.com', 'ZoneEdit',),
-        ('.yahoo.com', 'Yahoo!',),
-        ('.garanntor.', 'Garanntor',),
-        ('.upperlink.', 'Upperlink',),
-        ('.terra.', 'Terra Domínio',),
-        ('.registro.br', 'Registro.br',),
-        ('.register.com', 'Register.com',),
-        ('.myhosting.com', 'myhosting.com',),
-        ('.hover.com', 'Hover',),
-        ('.gandi.net', 'Gandi',),
-        ('.charlestonroadregistry.com', 'Google Registry',),
-        ('.eurodns.com', 'EuroDNS',),
-        ('.enom.com', 'eNom',),
-        ('.justhost.com', 'justhost',),
-        ('.melbourneit.net', 'Melbourne IT',),
-        ('.ezyreg.com', 'Melbourne IT',),
-        ('.namesecure.com', 'NameSecure',),
-        ('.dreamhost.com', 'DreamHost',),
-        ('everydns.net', 'EveryDNS',),
-        ('.worldnic.com', 'Network Solutions DNS',),
-        ('.blacknight.com', 'Blacknight DNS',),
-        ('.blacknightsolutions.com', 'Blacknight DNS',),
-        ('1and1.com', '1&1 DNS',),
-        ('.123-reg.', '123 Reg',),
-        ('.upcloud.com', 'UPCloud'),
-        ('.vultr.com', 'Vultr'),
-        ('.aliyun.com', 'Alibaba Cloud DNS'),
-        ('.ramnode.com', 'RamNode'),
-        ('.ddos-guard.net', 'DDOS-GUARD'),
-        ('.networktransit.net', 'NetDepot'),
-        ('.hostingholdings.com', 'NetDepot'),
-        ('.digitalpacific.',  'Digital Pacific'),
-        ('.aussiedns.',  'Digital Pacific'),
-        ('.auserver.',  'Digital Pacific'),
+        ('.netdc.', 'NetDC', [], None),
+        ('.ovh.', 'OVHcloud', [], None),
+        ('.digitalocean.com', 'Digital Ocean', [], None),
+        ('.awsdns-', 'Amazon Route 53', ['cloudfront.net'], 'check_missing_bucket'),
+        ('.akam.net', 'Akamai Edge DNS', [], None),
+        ('.akadns.net', 'Akamai Edge DNS', [], None),
+        ('.ak-adns.net', 'Akamai Edge DNS', [], None),
+        ('.akamaiedge.net', 'Akamai Edge DNS', [], None),
+        ('.akamaitech.net', 'Akamai', [], None),
+        ('.akagtm.net', 'Akamai', [], None),
+        ('.akamaistream.net', 'Akamai', [], None),
+        ('.akamaihd.net', 'Akamai', [], None),
+        ('.akamai.com', 'Akamai', [], None),
+        ('.azure-dns.', 'Azure DNS', [], None),
+        ('.cdnetworks.', 'CDNetworks', [], None),
+        ('.googledomains.com', 'Google Cloud Platform', [], None),
+        ('.cloudflare.', 'Cloudflare', [], None),
+        ('.dnsimple.com', 'DNSimple', [], None),
+        ('.mydyndns.', 'Dyn DNS', [], None),
+        ('.dynect.net', 'Dyn DNS', [], None),
+        ('.easydns.', 'easyDNS', [], None),
+        ('.no-ip.', 'No-IP', [], None),
+        ('.telindus.', 'Telindus', [], None),
+        ('.ultradns.', 'UltraDNS', [], None),
+        ('.verisign-grs.', 'Verisign', [], None),
+        ('.verisign.', 'Verisign', [], None),
+        ('.zonomi.com', 'Zonomi', [], None),
+        ('.worldwidedns.net', 'WorldwideDNS', [], None),
+        ('.uberns.', 'Total Uptime Technologies', [], None),
+        ('.pointhq.com', 'PointDNS', [], None),
+        ('.netriplex.', 'Netriplex', [], None),
+        ('.loaddns.', 'LoadDNS', [], None),
+        ('.glbs.me', 'GSLB.me', [], None),
+        ('.geoscaling.', 'GeoScaling DNS2', [], None),
+        ('.flexdns.', 'FlexDNS', [], None),
+        ('.durabledns.', 'DurableDNS', [], None),
+        ('.dnspod.', 'DNSPod', [], None),
+        ('.linode.com', 'Linode', [], None),
+        ('.csc.com', 'CSC', [], None),
+        ('.name-s.net', 'CloudfloorDNS', [], None),
+        ('.mtgsy.', 'CloudfloorDNS', [], None),
+        ('.softlayer.', 'IBM Cloud', [], None),
+        ('.stackpathdns.', 'Stackpath', [], None),
+        ('.rackspace.', 'Rackspace', [], None),
+        ('.dnspackage.', 'Premium DNS', [], None),
+        ('.syrahost.', 'WordPress Hosting', [], None),
+        ('.premium.exchange', 'Crazy Domains Exchange Manager', [], None),
+        ('.bluehost.com', 'Bluehost', [], None),
+        ('.siteground.biz', 'SiteGround', [], None),
+        ('.zeit.world', 'Zeit', [], None),
+        ('.zeit-world.', 'Zeit', [], None),
+        ('.ipmanagerinc.', 'IPM.Domains', [], None),
+        ('.domaincontrol.com', 'GoDaddy', [], None),
+        ('.cloudns.net', 'ClouDNS', [], None),
+        ('.dnsmadeeasy.com', 'DNSMadeEasy', [], None),
+        ('.zilore.net', 'Zilore', [], None),
+        ('.nsone.net', 'NS1', [], None),
+        ('.oraclevcn.com', 'Oracle Cloud Infrastructure', [], None),
+        ('.constellix.com', 'Constellix', [], None),
+        ('.name-services.com', 'Namecheap Hosting', [], None),
+        ('.registrar-servers.com', 'Namecheap Hosting', [], None),
+        ('.namecheaphosting.com', 'Namecheap Hosting', [], None),
+        ('.powerdns.net', 'PowerDNS', [], None),
+        ('.zoneedit.com', 'ZoneEdit', [], None),
+        ('.yahoo.com', 'Yahoo!', [], None),
+        ('.garanntor.', 'Garanntor', [], None),
+        ('.upperlink.', 'Upperlink', [], None),
+        ('.terra.', 'Terra Domínio', [], None),
+        ('.registro.br', 'Registro.br', [], None),
+        ('.register.com', 'Register.com', [], None),
+        ('.myhosting.com', 'myhosting.com', [], None),
+        ('.hover.com', 'Hover', [], None),
+        ('.gandi.net', 'Gandi', [], None),
+        ('.charlestonroadregistry.com', 'Google Registry', [], None),
+        ('.eurodns.com', 'EuroDNS', [], None),
+        ('.enom.com', 'eNom', [], None),
+        ('.justhost.com', 'justhost', [], None),
+        ('.melbourneit.net', 'Melbourne IT', [], None),
+        ('.ezyreg.com', 'Melbourne IT', [], None),
+        ('.namesecure.com', 'NameSecure', [], None),
+        ('.dreamhost.com', 'DreamHost', [], None),
+        ('everydns.net', 'EveryDNS', [], None),
+        ('.worldnic.com', 'Network Solutions DNS', [], None),
+        ('.blacknight.com', 'Blacknight DNS', [], None),
+        ('.blacknightsolutions.com', 'Blacknight DNS', [], None),
+        ('1and1.com', '1&1 DNS', [], None),
+        ('.123-reg.', '123 Reg', [], None),
+        ('.upcloud.com', 'UPCloud', [], None),
+        ('.vultr.com', 'Vultr', [], None),
+        ('.aliyun.com', 'Alibaba Cloud DNS', [], None),
+        ('.ramnode.com', 'RamNode', [], None),
+        ('.ddos-guard.net', 'DDOS-GUARD', [], None),
+        ('.networktransit.net', 'NetDepot', [], None),
+        ('.hostingholdings.com', 'NetDepot', [], None),
+        ('.digitalpacific.',  'Digital Pacific', [], None),
+        ('.aussiedns.',  'Digital Pacific', [], None),
+        ('.auserver.',  'Digital Pacific', [], None),
     ]
     a_takeovers = [
-        ('185.203.72.17', 'Tilda'),
-        ('52.56.203.177', 'Anvil'),
+        ('185.203.72.17', 'Tilda', [], None),
+        ('52.56.203.177', 'Anvil', [], None),
     ]
     _raw = None
 
@@ -342,51 +345,72 @@ class Worker(WorkerInterface):
         return True
 
     def _check_cname(self, host, dns_record: DnsRecord):
-        metadata = HTTPMetadata(url=f'https://{host}')
+        metadata = Metadata(url=f'https://{host}')
         metadata.verification_check()
         if metadata.dns_answer:
             logger.info(f'DNS {host} {metadata.dns_answer}')
         if metadata.registered:
             return
-        for host_segment, provider, *ignore_list in self.providers:
+        for host_segment, provider, ignore_list, verification_check in self.providers:
+            if ignore_list and self._matches_in_list(host, ignore_list):
+                continue
             if host_segment not in host:
                 continue
-            if ignore_list and self._matches_in_list(host, ignore_list[0]):
-                continue
+
+            evidence = ''
+            base_confidence = 20
+            confidence = base_confidence
+            if isinstance(verification_check, str):
+                verification_check_method = getattr(self, verification_check)
+                verified, evidence = verification_check_method(self.job.domain.name, host_segment, provider, dns_record)
+                if not verified:
+                    continue
+                confidence = 90
 
             finding = Finding()
             finding.domain_id = self.job.domain.domain_id
             finding.source_description = metadata.dns_answer
-            finding.evidence = f'dig CNAME {self.job.domain.name}'
+            finding.evidence = f'dig CNAME {self.job.domain.name}\n{evidence}'.strip()
             finding_detail = FindingDetail()
             finding_detail.title = f'Subdomain Takeover - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
             if finding_detail.exists():
                 finding_detail.hydrate()
             else:
-                finding_detail.severity_product = 80
-                finding_detail.confidence = 50
-                finding_detail.criticality = 80
+                finding_detail.severity_product = 50
+                finding_detail.confidence = base_confidence
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'DNS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
 
     def _check_ns(self, host, dns_record: DnsRecord):
-        for host_segment, provider, *ignore_list in self.managed_dns:
+        for host_segment, provider, ignore_list, verification_check in self.managed_dns:
             if host_segment not in host:
                 continue
-            if ignore_list and self._matches_in_list(host, ignore_list[0]):
+            if ignore_list and self._matches_in_list(host, ignore_list):
                 continue
+
+            evidence = ''
+            base_confidence = 10
+            confidence = base_confidence
+            if isinstance(verification_check, str):
+                verification_check_method = getattr(self, verification_check)
+                verified, evidence = verification_check_method(self.job.domain.name, host_segment, provider, dns_record)
+                if not verified:
+                    continue
+                confidence = 90
 
             finding = Finding()
             finding.domain_id = self.job.domain.domain_id
             finding.source_description = dns_record.raw
-            finding.evidence = f'dig NS {self.job.domain.name}'
+            finding.evidence = f'dig NS {self.job.domain.name}\n{evidence}'.strip()
             finding_detail = FindingDetail()
             finding_detail.title = f'DNS Hijacking - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
@@ -394,24 +418,36 @@ class Worker(WorkerInterface):
                 finding_detail.hydrate()
             else:
                 finding_detail.severity_product = 80
-                finding_detail.confidence = 10
-                finding_detail.criticality = 80
+                finding_detail.confidence = base_confidence
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'DNS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
 
     def _check_a(self, ip_addr, dns_record: DnsRecord):
-        for a_record, provider, *ignore_list in self.a_takeovers:
+        for a_record, provider, ignore_list, verification_check in self.a_takeovers:
             if a_record != ip_addr:
                 continue
-            if ignore_list and self._matches_in_list(ip_addr, ignore_list[0]):
+            if ignore_list and self._matches_in_list(ip_addr, ignore_list):
                 continue
-            metadata = HTTPMetadata(url=f'https://{self.job.domain.name}')
+
+            evidence = ''
+            base_confidence = 50
+            confidence = base_confidence
+            if isinstance(verification_check, str):
+                verification_check_method = getattr(self, verification_check)
+                verified, evidence = verification_check_method(self.job.domain.name, host_segment, provider, dns_record)
+                if not verified:
+                    continue
+                confidence = 90
+
+            metadata = Metadata(url=f'https://{self.job.domain.name}')
             metadata.verification_check()
             if str(metadata.code).startswith('2'):
                 continue
@@ -420,7 +456,7 @@ class Worker(WorkerInterface):
             finding = Finding()
             finding.domain_id = self.job.domain.domain_id
             finding.source_description = metadata.dns_answer or dns_record.raw
-            finding.evidence = f'dig A {self.job.domain.name}\n{ip_addr} resolves for any customer of {provider}'
+            finding.evidence = f'dig A {self.job.domain.name}\n{ip_addr} resolves for any customer of {provider}\n{evidence}'.strip()
             finding_detail = FindingDetail()
             finding_detail.title = f'Second-order Subdomain Takeover - Broken Link Hijacking - {provider}'
             finding_detail.finding_detail_id = oneway_hash(finding_detail.title)
@@ -428,13 +464,14 @@ class Worker(WorkerInterface):
                 finding_detail.hydrate()
             else:
                 finding_detail.severity_product = 80
-                finding_detail.confidence = 50
-                finding_detail.criticality = 80
+                finding_detail.confidence = base_confidence
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'DNS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
@@ -447,3 +484,28 @@ class Worker(WorkerInterface):
                 matched = True
                 break
         return matched
+
+    @staticmethod
+    def check_missing_bucket(domain_name: str, host_segment: str, provider: str, dns_record: DnsRecord):
+        evidence = None
+        proxies = None
+        if config.http_proxy or config.https_proxy:
+            proxies = {
+                'http': config.http_proxy,
+                'https': config.https_proxy
+            }
+        try:
+            xml_content = requests.get(f'http://{domain_name}',
+                allow_redirects=True,
+                proxies=proxies,
+                timeout=3
+            ).content
+            error = ElementTree.fromstring(xml_content)
+            if error.find('Code').text != 'NoSuchBucket':
+                return False, evidence
+            evidence = f"curl -sL http://{domain_name}\n# {error.find('Message').text} {error.find('BucketName').text}"
+
+        except Exception:
+            return False, None
+
+        return True, evidence

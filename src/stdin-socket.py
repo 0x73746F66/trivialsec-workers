@@ -12,7 +12,7 @@ from trivialsec.helpers.config import config
 
 
 logger.configure(log_level=config.log_level)
-logger.create_stream_logger(colourise=isatty(2))
+logger.create_stream_logger(pretty=isatty(2))
 logger.create_file_logger(file_path=config.log_file)
 
 def main(job: models.JobRun) -> bool:

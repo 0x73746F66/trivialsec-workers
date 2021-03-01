@@ -17,8 +17,8 @@ def send_webhook(account_id: int, event_name: str, data: dict, http_method: str 
         target = urlsplit(webhook.target)
         target_url = f'https://{target.netloc}{path.join(target.path, event_name)}'
         logger.debug(f"Sending webhook {target_url}")
+        now = datetime.utcnow()
         try:
-            now = datetime.utcnow()
             request = requests.Request(http_method, target_url, json=json_data, headers={
                 'Content-Type': 'application/json',
                 'X-Digest': 'HMAC-SHA3-512',

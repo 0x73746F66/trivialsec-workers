@@ -4,8 +4,8 @@ from io import StringIO
 from os import path, getcwd
 from trivialsec.models.domain import Domain
 from trivialsec.models.finding import Finding, FindingDetail
-from trivialsec.models.program import Program
-from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
+from trivialsec.models.program import Program, InventoryItem
+from trivialsec.helpers import extract_server_version, oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
@@ -65,8 +65,8 @@ class Worker(WorkerInterface):
         summary_parts = []
         if len(self.report["findings"]) > 0:
             summary_parts.append(f'{len(self.report["findings"])} issues')
-            if len(self.report["programs"]) > 0:
-                summary_parts.append(f' with {len(self.report["programs"])} programs')
+            if len(self.report['inventory_items']) > 0:
+                summary_parts.append(f' with {len(self.report["inventory_items"])} inventory_items')
             if len(self.report["domains"]) > 0:
                 summary_parts.append(f' and {len(self.report["domains"])} domains')
         if summary_parts:
@@ -137,12 +137,13 @@ class Worker(WorkerInterface):
             else:
                 finding_detail.severity_product = 80
                 finding_detail.confidence = 100
-                finding_detail.criticality = 80
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'SSL/TLS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = finding_detail.confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
@@ -168,12 +169,13 @@ class Worker(WorkerInterface):
             else:
                 finding_detail.severity_product = 100
                 finding_detail.confidence = 100
-                finding_detail.criticality = 90
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'SSL/TLS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = finding_detail.confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
@@ -186,9 +188,9 @@ class Worker(WorkerInterface):
                 continue
             key, match = matches[0]
             test = key.strip()
-            if bad is not None and bad in match:
+            if isinstance(bad, str) and bad in match:
                 matched_term = bad
-            elif good is not None and good not in match:
+            elif isinstance(good, str) and good not in match:
                 matched_term = good
             else:
                 continue
@@ -215,9 +217,9 @@ class Worker(WorkerInterface):
                 continue
             key, match = matches[0]
             test = key.strip()
-            if bad in match:
+            if isinstance(bad, str) and bad in match:
                 matched_term = bad
-            elif good is not None and good not in match:
+            elif isinstance(good, str) and good not in match:
                 matched_term = good
             else:
                 continue
@@ -235,12 +237,13 @@ class Worker(WorkerInterface):
             else:
                 finding_detail.severity_product = 50
                 finding_detail.confidence = 90
-                finding_detail.criticality = 50
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Industry and Regulatory Standards'
                 finding_detail.type_classifier = 'OWASP'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = finding_detail.confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
@@ -253,9 +256,9 @@ class Worker(WorkerInterface):
                 continue
             key, match = matches[0]
             test = key.strip()
-            if bad in match:
+            if isinstance(bad, str) and bad in match:
                 matched_term = bad
-            elif good is not None and good not in match:
+            elif isinstance(good, str) and good not in match:
                 matched_term = good
             else:
                 continue
@@ -272,12 +275,13 @@ class Worker(WorkerInterface):
             else:
                 finding_detail.severity_product = 100
                 finding_detail.confidence = 90
-                finding_detail.criticality = 100
                 finding_detail.type_namespace = 'Software and Configuration Checks'
                 finding_detail.type_category = 'Vulnerabilities'
                 finding_detail.type_classifier = 'SSL/TLS'
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = finding_detail.confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
@@ -298,17 +302,27 @@ class Worker(WorkerInterface):
             if '--' in program_value:
                 continue
 
-            program = Program()
-            program.domain_id = self.job.domain.domain_id
-            program.name = program_value
-            if match_text == reverse_proxy_banner:
-                program.category = 'proxy'
-            elif match_text == server_banner:
-                program.category = 'server'
-            elif match_text == application_banner:
-                program.category = 'application'
-            program.source_description = f'HTTP Header [{program.category}] of {self.job.domain.name}'
-            self.report['programs'].append(program)
+            server_name, program_version = extract_server_version(program_value)
+            if server_name is None:
+                continue
+            program = Program(name=server_name)
+            program.hydrate('name')
+            if program.category is None:
+                if match_text == reverse_proxy_banner:
+                    program.category = 'proxy'
+                elif match_text == server_banner:
+                    program.category = 'server'
+                elif match_text == application_banner:
+                    program.category = 'application'
+            if program.program_id is None:
+                program.persist()
+            self.report['inventory_items'].append(InventoryItem(
+                program_id=program.program_id,
+                project_id=self.job.domain.project_id,
+                domain_id=self.job.domain.domain_id,
+                version=program_version,
+                source_description=f'HTTP Header [{program.category}] of {self.job.domain.name}'
+            ))
 
         san_matched = re.findall(r'(subjectAltName)(.*$)', log_output, re.MULTILINE)
         if san_matched:
@@ -392,10 +406,8 @@ class Worker(WorkerInterface):
                 finding_detail.hydrate()
             else:
                 finding_detail.confidence = 100
-                finding_detail.criticality = 50
                 if severity == 'INFO':
                     finding_detail.severity_product = 0
-                    finding_detail.criticality = 0
                 elif severity == 'LOW':
                     finding_detail.severity_product = 30
                 elif severity == 'MEDIUM':
@@ -406,6 +418,8 @@ class Worker(WorkerInterface):
                     finding_detail.severity_product = 90
                 finding_detail.persist(exists=False)
 
+            finding.cvss_vector = finding_detail.cvss_vector
+            finding.confidence = finding_detail.confidence
             finding.severity_normalized = finding_detail.severity_product
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
