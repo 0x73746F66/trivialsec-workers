@@ -75,7 +75,7 @@ def build_report(job: JobRun, output: str, log_output: str, report: dict, config
 
         if domain.exists(['name', 'project_id']):
             report['dns_records'].append(DnsRecord(
-                domain_id=domain.id,
+                domain_id=domain.domain_id,
                 ttl=ttl,
                 dns_class=dns_class,
                 resource=resource,

@@ -1,5 +1,5 @@
 from os import path, getcwd
-from xml.etree import ElementTree # nosemgrep: use-defused-xml
+from xml.etree import ElementTree # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
