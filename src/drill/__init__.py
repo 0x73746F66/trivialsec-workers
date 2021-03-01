@@ -1,5 +1,5 @@
 from os import path, getcwd
-from xml.etree import ElementTree
+from xml.etree import ElementTree # nosemgrep: use-defused-xml
 import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
@@ -442,7 +442,7 @@ class Worker(WorkerInterface):
             confidence = base_confidence
             if isinstance(verification_check, str):
                 verification_check_method = getattr(self, verification_check)
-                verified, evidence = verification_check_method(self.job.domain.name, host_segment, provider, dns_record)
+                verified, evidence = verification_check_method(self.job.domain.name, a_record, provider, dns_record)
                 if not verified:
                     continue
                 confidence = 90

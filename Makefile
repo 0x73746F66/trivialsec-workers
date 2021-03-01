@@ -48,6 +48,7 @@ install-dev: common
 
 lint:
 	pylint --jobs=0 --persistent=y --errors-only src/**/*.py
+	semgrep -q --strict --timeout=0 --config=p/r2c-ci --lang=py src/**/*.py
 
 build: package-dev ## Build compressed container
 	docker-compose build --compress
