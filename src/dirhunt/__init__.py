@@ -1,5 +1,7 @@
 from worker import WorkerInterface
-
+"""
+dirhunt --progress-disabled --max-depth 24 --not-allow-redirects --to-file dirhunt.json http://nib.com.au/
+"""
 
 class Worker(WorkerInterface):
     updated = False

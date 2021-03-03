@@ -135,6 +135,7 @@ instanceId=$(aws ec2 run-instances \
     --subnet-id ${SUBNET_ID} \
     --security-group-ids ${SECURITY_GROUP_IDS} \
     --iam-instance-profile Name=${IAM_INSTANCE_PROFILE} \
+    --credit-specification 'CpuCredits=standard' \
     --tag-specifications "ResourceType=instance,Tags=${baker_tags}" "ResourceType=volume,Tags=${baker_tags}" \
     --user-data file://${baker_script} \
     --query 'Instances[].InstanceId' \
@@ -172,6 +173,7 @@ declare -a results=\($(aws ec2 run-instances \
     --subnet-id ${SUBNET_ID} \
     --security-group-ids ${SECURITY_GROUP_IDS} \
     --iam-instance-profile Name=${IAM_INSTANCE_PROFILE} \
+    --credit-specification 'CpuCredits=standard' \
     --tag-specifications "ResourceType=instance,Tags=${app_tags}" "ResourceType=volume,Tags=${app_tags}" \
     --user-data file://${userdata_script} \
     --query 'Instances[].InstanceId' --output text)\)

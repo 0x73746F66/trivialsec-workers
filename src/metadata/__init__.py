@@ -66,23 +66,6 @@ class Worker(WorkerInterface):
 
         return True
 
-    def analyse_report(self):
-        self.job.domain.get_stats()
-        scan_next = False
-        http_last_checked = datetime.fromisoformat(getattr(self.job.domain, 'http_last_checked')).replace(microsecond=0)
-        for domain_stat in self.job.domain.stats:
-            created_at = datetime.fromisoformat(domain_stat.created_at)
-            if created_at == http_last_checked and domain_stat.domain_stat == DomainStat.HTTP_CODE and int(str(domain_stat.domain_value)[0]) in [2,3]:
-                scan_next = True
-                break
-            if domain_stat.domain_stat == DomainStat.DNS_REGISTERED and domain_stat.domain_value == '1':
-                scan_next = True
-                break
-
-        if scan_next is True and isinstance(self.job.queue_data.scan_next, list):
-            for job_name in self.job.queue_data.scan_next:
-                queue_job(self.job, job_name, self.job.domain.name)
-
     def check_subject_alt_name(self):
         if not hasattr(self.job.domain, DomainStat.HTTP_CERTIFICATE):
             logger.warning(f'Missing {DomainStat.HTTP_CERTIFICATE} for {self.job.domain.name}')

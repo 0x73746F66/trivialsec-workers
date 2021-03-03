@@ -17,7 +17,7 @@ if [[ ! -f ${config_filepath} ]]; then
 fi
 
 start_time="$(date -u +%s)"
-amass enum -config ${config_filepath} -json ${report} -log ${log_file} -nocolor 2>&1 | tee -a ${log_file} /tmp/application.log
+/usr/local/bin/amass enum -config ${config_filepath} -json ${report} -log ${log_file} -nocolor 2>&1 | tee -a ${log_file} /tmp/application.log
 
 end_time="$(date -u +%s)"
 elapsed="$(($end_time-$start_time))"

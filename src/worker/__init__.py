@@ -239,7 +239,7 @@ class WorkerInterface:
                         description=f'Apex domain {tld.name} saved via {self.job.queue_data.service_type_category}',
                         url=f'/domain/{tld.domain_id}'
                     ).persist()
-                    queue_job(self.job, 'metadata', tld.name)
+                    queue_job(self.job, 'metadata', tld.name, scan_next=['drill', 'testssl'])
                     tld_dict = {}
                     for col in domain.cols():
                         tld_dict[col] = getattr(tld, col)
@@ -273,7 +273,7 @@ class WorkerInterface:
                     description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
                     url=f'/domain/{domain.domain_id}'
                 ).persist()
-                queue_job(self.job, 'metadata', domain.name)
+                queue_job(self.job, 'metadata', domain.name, scan_next=['drill', 'testssl'])
                 domain_dict = {}
                 for col in domain.cols():
                     domain_dict[col] = getattr(domain, col)
@@ -365,6 +365,10 @@ class WorkerInterface:
         if 'domain_stats' in self.report:
             self._save_domain_stats(self.report['domain_stats'])
 
+        if isinstance(self.job.queue_data.scan_next, list):
+            for job_name in self.job.queue_data.scan_next:
+                queue_job(self.job, job_name, self.job.domain.name)
+
         return True
 
     def get_result_filename(self) -> str:
@@ -439,7 +443,7 @@ def handle_error(err, job: JobRun):
         url=url,
     ).persist()
 
-def queue_job(original_job: JobRuns, name: str, target: str = None):
+def queue_job(original_job: JobRuns, name: str, target: str = None, scan_next: list = []):
     target = target or original_job.queue_data.target
     service_type = ServiceType(name=name)
     service_type.hydrate(['name'])
@@ -463,5 +467,6 @@ def queue_job(original_job: JobRuns, name: str, target: str = None):
         project=original_job.project,
         priority=0,
         params={'target': target},
-        on_demand=False
+        on_demand=False,
+        scan_next=scan_next,
     )
