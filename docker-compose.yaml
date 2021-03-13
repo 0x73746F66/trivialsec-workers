@@ -1,6 +1,7 @@
 version: '3.6'
 x-defaults: &defaults
   env_file: .env
+  network_mode: host
   restart: unless-stopped
   logging:
     options:
@@ -33,10 +34,6 @@ services:
         OPENSSL_PKG: ${OPENSSL_PKG}
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
-    networks:
-      trivialsec:
-        aliases:
-          - workers
     volumes:
       # - ./worker_datadir:/tmp
       - ./bin:/srv/app/lib/bin
@@ -49,8 +46,3 @@ services:
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
-
-networks:
-  trivialsec:
-    external: true
-    name: containers-common_trivialsec
