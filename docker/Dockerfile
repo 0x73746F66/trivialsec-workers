@@ -34,12 +34,6 @@ WORKDIR /srv/app
 
 RUN mkdir -p /srv/app/lib /amass /openssl /tmp/testssl /testssl/etc && \
     touch /tmp/application.log && \
-    yum install -q -y \
-        openjdk-11-jdk \
-        ldns && \
-    yum clean metadata && \
-    yum -q -y clean all && \
-    rpm --quiet -U https://nmap.org/dist/nmap-7.91-1.x86_64.rpm && \
     aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/amass_linux_amd64.zip /tmp/trivialsec/amass_linux_amd64.zip && \
     aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/openssl.zip /tmp/trivialsec/openssl.zip && \
     aws s3 cp --only-show-errors s3://trivialsec-assets/dev/${COMMON_VERSION}/testssl.zip /tmp/trivialsec/testssl.zip && \
