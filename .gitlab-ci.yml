@@ -5,16 +5,8 @@ variables:
   AWS_ACCESS_KEY_ID: $TF_VAR_aws_access_key_id
   AWS_SECRET_ACCESS_KEY: $TF_VAR_aws_secret_access_key
   AWS_REGION: ap-southeast-2
-  APP_NAME: worker
   TAG_ENV: Prod
   TAG_PURPOSE: Deploy
-  BASE_AMI: ami-09f765d333a8ebb4b
-  SUBNET_ID: subnet-8b05e8c3
-  DEFAULT_INSTANCE_TYPE: t3a.medium
-  IAM_INSTANCE_PROFILE: EC2-TrivialSec
-  COST_CENTER: saas
-  PRIV_KEY_NAME: trivialsec-prod
-  SECURITY_GROUP_IDS: sg-04a8dac724adcad3c sg-01bbdeecc61359d59 sg-0b37a6d2e9a6ae0e8
 
 before_script:
   - aws --version
@@ -60,27 +52,6 @@ build-upload:
   stage: build
   script:
     - make package-upload
-  only:
-    refs:
-      - main
-
-deploy:
-  tags:
-    - python
-  stage: deploy
-  script:
-    - export NUM_INSTANCES=$(aws ec2 describe-instances --filters 'Name=tag:Name,Values=Worker' --query 'Reservations[].Instances[]' | jq '. | length')
-    - echo NUM_INSTANCES ${NUM_INSTANCES}
-    - ./deploy/launch.sh
-  only:
-    refs:
-      - main
-
-teardown:
-  retry: 2
-  stage: teardown
-  script:
-    - ./deploy/teardown.sh
   only:
     refs:
       - main
