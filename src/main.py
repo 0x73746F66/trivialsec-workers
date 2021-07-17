@@ -7,8 +7,7 @@ import time
 import importlib
 import sys
 import json
-from trivialsec.helpers.config import config
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from trivialsec.helpers import check_domain_rules, oneway_hash
 from trivialsec.services.jobs import QueueData
 from trivialsec.models.job_run import JobRun, JobRuns
@@ -21,9 +20,7 @@ from worker.cli import get_options, s3_upload
 from worker.sockets import close_socket
 
 
-logger.configure(log_level=config.log_level)
-logger.create_stream_logger()
-logger.create_file_logger(file_path=config.log_file)
+logger = logging.getLogger(__name__)
 options = get_options()
 
 def handle_signals(job: JobRun):
@@ -97,6 +94,7 @@ def main(job: JobRun) -> bool:
         )
         s3_path_prefix = path.join(
             options["aws"].get("archive_object_prefix", "").strip(),
+            'reports',
             f'account-{job.account_id}',
             f'project-{job.project_id}',
             f'{job.queue_data.service_type_category}-{job.queue_data.service_type_id}'

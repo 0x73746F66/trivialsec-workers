@@ -8,9 +8,11 @@ from trivialsec.models.finding import Finding, FindingDetail
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 from trivialsec.helpers.transport import Metadata
 from trivialsec.helpers.config import config
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from worker import WorkerInterface
 
+
+logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     providers = [

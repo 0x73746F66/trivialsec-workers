@@ -6,9 +6,11 @@ from trivialsec.models.domain import Domain
 from trivialsec.models.finding import Finding, FindingDetail
 from trivialsec.models.program import Program, InventoryItem
 from trivialsec.helpers import extract_server_version, oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from worker import WorkerInterface
 
+
+logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     def __init__(self, job, config: dict):

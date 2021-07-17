@@ -6,9 +6,11 @@ import hashlib
 import json
 import requests
 from retry.api import retry
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from trivialsec.models.webhook import Webhooks
 
+
+logger = logging.getLogger(__name__)
 
 @retry((ConnectionError), tries=5)
 def send_webhook(account_id: int, event_name: str, data: dict, http_method: str = 'POST'):

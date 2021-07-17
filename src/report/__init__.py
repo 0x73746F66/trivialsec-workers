@@ -1,4 +1,3 @@
-from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
 

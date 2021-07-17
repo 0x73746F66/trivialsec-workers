@@ -1,9 +1,11 @@
 import json
 import socketio
 from retry.api import retry
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from worker.cli import get_options
 
+
+logger = logging.getLogger(__name__)
 
 sio = socketio.Client()
 

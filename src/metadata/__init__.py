@@ -8,10 +8,12 @@ from trivialsec.models.domain import Domain, DomainStat
 from trivialsec.models.program import Program, InventoryItem
 from trivialsec.helpers import extract_server_version
 from trivialsec.helpers.transport import Metadata, download_file
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from trivialsec.helpers.config import config
-from worker import WorkerInterface, queue_job
+from worker import WorkerInterface
 
+
+logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     updated = False

@@ -3,9 +3,11 @@ import sys
 import os
 import time
 from subprocess import Popen
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from trivialsec.helpers.config import config
 
+
+logger = logging.getLogger(__name__)
 
 def get_options() -> dict:
     parser = argparse.ArgumentParser()

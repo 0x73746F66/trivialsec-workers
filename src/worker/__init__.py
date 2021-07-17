@@ -2,7 +2,7 @@ from importlib import invalidate_caches
 import tldextract
 import re
 from datetime import datetime
-from trivialsec.helpers.log_manager import logger
+from gunicorn.glogging import logging
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.models.member import Member
 from trivialsec.services.jobs import QueueData, queue_job as service_queue_job
@@ -18,6 +18,8 @@ from trivialsec.models.dns_record import DnsRecord
 from trivialsec.models.program import Program, InventoryItem
 from worker.sockets import send_event
 
+
+logger = logging.getLogger(__name__)
 
 class WorkerInterface:
     config = None

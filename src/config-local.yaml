@@ -1,11 +1,12 @@
 ---
 app:
   env: Dev
-  version: 21.3.20
-  app_name: chris-eros
+  version: 21.6.28
   log_file: /tmp/application.log
   log_level: DEBUG
   frontend:
+    asset_scheme: "http://"
+    asset_domain: localhost:8080
     site_scheme: "http://"
     site_domain: localhost:8080
     app_scheme: "http://"
@@ -16,7 +17,7 @@ app:
     socket_domain: localhost:5080
   backend:
     socket_scheme: "http://"
-    socket_domain: sockets:5080
+    socket_domain: push-service:5080
   cve:
     url: http://search:5180
   nameservers:
@@ -30,21 +31,21 @@ app:
     ports: 20-23,25,53,57,67-69,80,81,82,107-113,115,118-119,135,137-139,143,153,156,170,177,179,194,209,213,218,220,300,311,366,369-371,383,384,387,389,399,427,433,434,443-445,464,465,475,491,514,515,517,518,520,521,524,530-533,540,546-548,556,560,561,563-585,587,591,593,601,604,623,625,631,635,636,639,641,646-648,653-655,657,660,666,674,688,690,691,706,711,712,749-754,760,782,783,808,832,843,847,848,873,953-61000
 
 redis:
-  host: localhost
+  host: redis
   ssl: False
   ttl: 300
 
 mysql:
   database: trivialsec
   user: root
-  host: localhost
+  host: mysql
 
 aws:
   region_name: ap-southeast-2
-  archive_bucket: trivialsec-assets
-  archive_object_prefix: archive/
-  public_bucket: trivialsec-assets
-  public_object_prefix: static/
+  archive_bucket: archive-trivialsec
+  archive_object_prefix: dev/
+  public_bucket: assets-trivialsec
+  public_object_prefix: dev/
 
 sendgrid:
   templates:
@@ -61,6 +62,8 @@ sendgrid:
     marketing: 14105
   lists:
     subscribers: a656c506-1a36-45ad-ad29-bb54db25ccd9
+    members: 7c88b8a4-9b7a-4a25-9b09-be3d3a0cdcf3
+    trials: 6d72d4a5-5e15-455f-9cd4-0f28a9f06e24
 
 stripe:
   account: acct_1HTJBRGZtHTgMn6l

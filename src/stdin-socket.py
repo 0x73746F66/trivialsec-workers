@@ -5,15 +5,12 @@ from os import path, isatty, makedirs
 import sys
 import json
 import argparse
-from trivialsec import models, helpers
-from trivialsec.helpers.log_manager import logger
-from trivialsec.helpers.config import config
+from gunicorn.glogging import logging
+from trivialsec import models
 # from worker.sockets import close_socket
 
 
-logger.configure(log_level=config.log_level)
-logger.create_stream_logger(pretty=isatty(2))
-logger.create_file_logger(file_path=config.log_file)
+logger = logging.getLogger(__name__)
 
 def main(job: models.JobRun) -> bool:
     for line in sys.stdin:

@@ -31,7 +31,7 @@ def disconnect():
 
 def send_event(event: str, data: dict, namespace: str = None):
     if not sio.connected:
-        sio.connect('http://sockets:5080')
+        sio.connect(config.socket_url)
     sio.emit(event, data, namespace=namespace)
 
 def get_customer_domains(domain_name):
