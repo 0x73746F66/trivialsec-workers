@@ -1,6 +1,5 @@
 from importlib import invalidate_caches
 import tldextract
-import re
 from datetime import datetime
 from gunicorn.glogging import logging
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
@@ -10,12 +9,13 @@ from trivialsec.models import UpdateTable
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
 from trivialsec.models.job_run import JobRun, JobRuns
-from trivialsec.models.domain import Domain, DomainStat
+from trivialsec.models.domain import DomainStat
+from trivialsec.models.domain_stat import DomainStat
 from trivialsec.models.finding import Finding
 from trivialsec.models.security_alert import SecurityAlert
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.models.dns_record import DnsRecord
-from trivialsec.models.program import Program, InventoryItem
+from trivialsec.models.inventory import InventoryItem
 from worker.sockets import send_event
 
 

@@ -12,7 +12,8 @@ from trivialsec.helpers import check_domain_rules, oneway_hash
 from trivialsec.services.jobs import QueueData
 from trivialsec.models.job_run import JobRun, JobRuns
 from trivialsec.models.service_type import ServiceType
-from trivialsec.models.account import Account, AccountConfig
+from trivialsec.models.account import Account
+from trivialsec.models.account_config import AccountConfig
 from trivialsec.models.project import Project
 from trivialsec.models.domain import Domain
 from worker import update_state, handle_error

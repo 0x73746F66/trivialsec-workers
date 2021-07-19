@@ -4,7 +4,8 @@ import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.models.dns_record import DnsRecord
-from trivialsec.models.finding import Finding, FindingDetail
+from trivialsec.models.finding_detail import FindingDetail
+from trivialsec.models.finding import Finding
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 from trivialsec.helpers.transport import Metadata
 from trivialsec.helpers.config import config

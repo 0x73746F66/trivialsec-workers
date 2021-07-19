@@ -4,8 +4,10 @@ import json
 import requests
 import tldextract
 from bs4 import BeautifulSoup as bs
-from trivialsec.models.domain import Domain, DomainStat
-from trivialsec.models.program import Program, InventoryItem
+from trivialsec.models.domain import Domain
+from trivialsec.models.domain_stat import DomainStat
+from trivialsec.models.inventory import InventoryItems
+from trivialsec.models.program import Program
 from trivialsec.helpers import extract_server_version
 from trivialsec.helpers.transport import Metadata, download_file
 from gunicorn.glogging import logging
