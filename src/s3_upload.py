@@ -5,7 +5,7 @@ import boto3
 from trivialsec.helpers.config import config
 
 
-def main(options: dict):
+def main(options :dict):
     response = ''
     aws_session = boto3.Session(region_name=options['aws'].get('region_name'))
     s3_client = aws_session.client('s3')

@@ -41,7 +41,7 @@ def handle_signals(job: JobRun):
     signal.signal(signal.SIGTSTP, handler) # ctrl+z
     signal.signal(signal.SIGINT, handler) # ctrl+c
 
-def process(job: JobRun, job_args: list) -> bool:
+def process(job: JobRun, job_args :list) -> bool:
     retcode = None
     error = 'Unknown'
     logger.info(' '.join(job_args))
@@ -66,14 +66,14 @@ def process(job: JobRun, job_args: list) -> bool:
 
     return True
 
-def mkpath(filepath: str):
+def mkpath(filepath :str):
     try:
         makedirs(path.dirname(filepath))
     except OSError as exc: # EEXIST race condition
         if exc.errno != errno.EEXIST:
             raise
 
-def complete_job(job: JobRuns, report_summary: str, queue_data_path: str, queue_data_object_path: str):
+def complete_job(job: JobRuns, report_summary :str, queue_data_path :str, queue_data_object_path :str):
     job.completed_at = datetime.utcnow().isoformat()
     job.queue_data.completed_at = job.completed_at
     job.queue_data.report_summary = report_summary[:255]

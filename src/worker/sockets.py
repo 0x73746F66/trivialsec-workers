@@ -26,7 +26,7 @@ def close_socket():
     sio.disconnect()
 
 @retry((ConnectionError), tries=5)
-def send_event(event: str, data: dict):
+def send_event(event :str, data :dict):
     options = get_options()
     if not sio.connected:
         try:

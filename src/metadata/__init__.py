@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     updated = False
-    def __init__(self, job, config: dict):
+    def __init__(self, job, config :dict):
         super().__init__(job, config)
 
     def get_result_filename(self) -> str:
@@ -45,10 +45,10 @@ class Worker(WorkerInterface):
     def post_job_exe(self) -> bool:
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         return 'Updated metadata' if self.updated else 'No metadata'
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         self.report['domain_stats'] = self.job.domain.gather_stats()
         self.check_subject_alt_name()
         self.check_headers()
@@ -233,11 +233,11 @@ class Worker(WorkerInterface):
         except Exception as err:
             logger.warning(err)
 
-    def get_domian_monitor_token_dns(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_dns(self, hibp_verify_txt :str):
         hibp_token, _ = Metadata.get_txt_value(self.job.domain.name, hibp_verify_txt)
         return hibp_token
 
-    def get_domian_monitor_token_meta(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_meta(self, hibp_verify_txt :str):
         hibp_token = None
         try:
             verify_url = f'http://{self.job.domain.name}/{hibp_verify_txt}.txt'
@@ -250,7 +250,7 @@ class Worker(WorkerInterface):
             logger.warning(err)
         return hibp_token
 
-    def get_domian_monitor_token_file(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_file(self, hibp_verify_txt :str):
         hibp_token = None
         html_content = self.job.domain._http_metadata._content # pylint: disable=protected-access
         if html_content is not None:

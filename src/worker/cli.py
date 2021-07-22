@@ -34,7 +34,7 @@ def get_options() -> dict:
 
     return opts
 
-def s3_upload(source_path: str, destination_path: str) -> str:
+def s3_upload(source_path :str, destination_path :str) -> str:
     retcode = None
     json_response = ''
     params = [

@@ -13,7 +13,7 @@ from worker import WorkerInterface
 logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
-    def __init__(self, job, config: dict):
+    def __init__(self, job, config :dict):
         super().__init__(job, config)
 
     def get_result_filename(self) -> str:
@@ -326,7 +326,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["domains"]) > 0:
@@ -337,7 +337,7 @@ class Worker(WorkerInterface):
             summary = f"Found {''.join(summary_parts)}"
         return summary
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         logger.info(f'json_output {cmd_output}')
         logger.info(f'log_output {log_output}')
         ip_list = set()

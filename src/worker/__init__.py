@@ -55,7 +55,7 @@ class WorkerInterface:
         'updates': [],
     }
 
-    def __init__(self, job: JobRun, config: dict):
+    def __init__(self, job: JobRun, config :dict):
         if isinstance(job, JobRun):
             self.job = job
         if isinstance(config, dict):
@@ -82,7 +82,7 @@ class WorkerInterface:
 
         return result
 
-    def _save_findings(self, findings: list):
+    def _save_findings(self, findings :list):
         for finding in findings:
             cache_keys = []
             finding.account_id = self.job.account_id
@@ -125,7 +125,7 @@ class WorkerInterface:
                 'finding': finding_dict,
             })
 
-    def _save_security_alerts(self, security_alerts: list):
+    def _save_security_alerts(self, security_alerts :list):
         for security_alert in security_alerts:
             cache_keys = []
             security_alert.account_id = self.job.account_id
@@ -153,7 +153,7 @@ class WorkerInterface:
                 'alert': alert_dict,
             })
 
-    def _save_domain_stats(self, domain_stats: list):
+    def _save_domain_stats(self, domain_stats :list):
         for domain_stat in domain_stats:
             cache_keys = []
             exists_params = []
@@ -177,7 +177,7 @@ class WorkerInterface:
                         cache_keys.append(cache_key.format(domain_id=domain_stat.domain_id))
             domain_stat.persist(exists=exists, invalidations=cache_keys)
 
-    def _save_inventory_items(self, inventory_items: list):
+    def _save_inventory_items(self, inventory_items :list):
         for inventory_item in inventory_items:
             cache_keys = []
             inventory_item.account_id = self.job.account_id
@@ -211,7 +211,7 @@ class WorkerInterface:
                 'inventory': inventory_dict,
             })
 
-    def _save_domains(self, domains: list):
+    def _save_domains(self, domains :list):
         utcnow = datetime.utcnow()
         for domain in domains:
             cache_keys = []
@@ -285,7 +285,7 @@ class WorkerInterface:
                     'domain': domain_dict,
                 })
 
-    def _save_known_ips(self, known_ips: list):
+    def _save_known_ips(self, known_ips :list):
         for known_ip in known_ips:
             cache_keys = []
             if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
@@ -317,7 +317,7 @@ class WorkerInterface:
                 'ipaddr': ip_dict,
             })
 
-    def _save_dns_records(self, dns_records: list):
+    def _save_dns_records(self, dns_records :list):
         for dns_record in dns_records:
             if dns_record.answer in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
                 continue
@@ -345,7 +345,7 @@ class WorkerInterface:
                     'dns': dns_dict,
                 })
 
-    def _save_update_fields(self, updates: list):
+    def _save_update_fields(self, updates :list):
         for update_table in updates:
             update_table.persist()
 
@@ -391,16 +391,16 @@ class WorkerInterface:
     def post_job_exe(self) -> bool:
         "returns True when successful command verification passes"
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         "returns data to persist"
 
     def get_archive_files(self) -> dict:
         "returns file name amd paths of files to send to S3"
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         "returns a human readable summary"
 
-def update_state(job: JobRun, state: str, message: str = None):
+def update_state(job: JobRun, state :str, message :str = None):
     if message is not None:
         job.worker_message = message
     job.updated_at = datetime.utcnow().isoformat()
@@ -445,7 +445,7 @@ def handle_error(err, job: JobRun):
         url=url,
     ).persist()
 
-def queue_job(original_job: JobRuns, name: str, target: str = None, scan_next: list = []):
+def queue_job(original_job: JobRuns, name :str, target :str = None, scan_next :list = []):
     target = target or original_job.queue_data.target
     service_type = ServiceType(name=name)
     service_type.hydrate(['name'])

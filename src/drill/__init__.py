@@ -220,7 +220,7 @@ class Worker(WorkerInterface):
     ]
     _raw = None
 
-    def __init__(self, job, config: dict):
+    def __init__(self, job, config :dict):
         super().__init__(job, config)
 
     def get_result_filename(self) -> str:
@@ -275,7 +275,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["dns_records"]) > 0:
@@ -288,7 +288,7 @@ class Worker(WorkerInterface):
             summary = f"Found {' '.join(summary_parts)}"
         return summary
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         for dns_record_raw in cmd_output.splitlines():
             fqdn, ttl, dns_class, resource, *answer = dns_record_raw.split()
             answer = " ".join(answer)
@@ -480,7 +480,7 @@ class Worker(WorkerInterface):
             self.report['findings'].append(finding)
 
     @staticmethod
-    def _matches_in_list(search_within: str, substring_list: list) -> bool:
+    def _matches_in_list(search_within :str, substring_list :list) -> bool:
         matched = False
         for substring in substring_list:
             if substring in search_within:
@@ -489,7 +489,7 @@ class Worker(WorkerInterface):
         return matched
 
     @staticmethod
-    def check_missing_bucket(domain_name: str, host_segment: str, provider: str, dns_record: DnsRecord):
+    def check_missing_bucket(domain_name :str, host_segment :str, provider :str, dns_record: DnsRecord):
         evidence = None
         proxies = None
         if config.http_proxy or config.https_proxy:
