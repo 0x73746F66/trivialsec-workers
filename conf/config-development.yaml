@@ -1,46 +1,57 @@
 ---
 app:
-  env: Prod
+  env: Dev
   version: 21.6.28
   log_file: /tmp/application.log
-  log_level: WARNING
+  log_level: DEBUG
   frontend:
-    asset_scheme: "https://"
-    asset_domain: www.trivialsec.com
-    site_scheme: "https://"
-    site_domain: www.trivialsec.com
-    app_scheme: "https://"
-    app_domain: app.trivialsec.com
-    api_scheme: "https://"
-    api_domain: api.trivialsec.com
-    socket_scheme: "wss://"
-    socket_domain: ws.trivialsec.com
+    asset_scheme: "http://"
+    asset_domain: localhost:8080
+    site_scheme: "http://"
+    site_domain: localhost:8080
+    app_scheme: "http://"
+    app_domain: localhost:5000
+    api_scheme: "http://"
+    api_domain: localhost:5081
+    socket_scheme: "http://"
+    socket_domain: localhost:5080
   backend:
-    socket_scheme: "wss://"
-    socket_domain: ws.trivialsec.com
+    socket_scheme: "http://"
+    socket_domain: push-service:5080
   cve:
     url: http://search:5180
   nameservers:
-    - 169.254.169.253
+    - 1.1.1.1     # Cloudflare
+    - 8.8.8.8     # Google
+    - 64.6.64.6   # Verisign
+    - 74.82.42.42 # Hurricane Electric
+    - 77.88.8.1   # Yandex.DNS
+    - 9.9.9.9     # Quad9
   nmap:
     ports: 20-23,25,53,57,67-69,80,81,82,107-113,115,118-119,135,137-139,143,153,156,170,177,179,194,209,213,218,220,300,311,366,369-371,383,384,387,389,399,427,433,434,443-445,464,465,475,491,514,515,517,518,520,521,524,530-533,540,546-548,556,560,561,563-585,587,591,593,601,604,623,625,631,635,636,639,641,646-648,653-655,657,660,666,674,688,690,691,706,711,712,749-754,760,782,783,808,832,843,847,848,873,953-61000
+  public_endpoints:
+    - /confirmation
+    - /verify
+    - /login
+    - /logout
+    - /recovery
 
 redis:
-  host: master.trivialsec-prod-redis.4kjmta.apse2.cache.amazonaws.com
-  ssl: True
+  host: redis
+  ssl: False
   ttl: 300
 
 mysql:
   database: trivialsec
-  user: trivialsec
-  host: trivialsec-main.c3qpuhf7bu2e.ap-southeast-2.rds.amazonaws.com
+  user: root
+  host: mysql
 
 aws:
   region_name: ap-southeast-2
   archive_bucket: archive-trivialsec
-  archive_object_prefix: prod/
+  archive_object_prefix: dev/
   public_bucket: assets-trivialsec
-  public_object_prefix: prod/
+  public_object_prefix: dev/
 
 sendgrid:
   templates:
@@ -78,7 +89,6 @@ stripe:
 amass:
   output_directory: /tmp
   maximum_dns_queries: 20000
-  include_unresolvable: true
   public_dns_resolvers: true
   score_resolvers: true
   monitor_resolver_rate: true
@@ -88,6 +98,7 @@ amass:
   alterations:
     enabled: false
     add_numbers: true
+  sources_minimum_ttl: 1440
   sources:
     anubis:
       name: Anubis
