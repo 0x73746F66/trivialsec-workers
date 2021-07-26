@@ -35,6 +35,8 @@ app:
     - /login
     - /logout
     - /recovery
+  require_authz:
+    - /account/update-billing-email
 
 redis:
   host: redis
