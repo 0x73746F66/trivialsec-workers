@@ -2,6 +2,7 @@ SHELL := /bin/bash
 -include .env
 export $(shell sed 's/=.*//' .env)
 
+REPO_ORG = registry.gitlab.com/trivialsec/workers
 TESTSSL_URL = https://testssl.sh
 BUCKET = tfplans-trivialsec
 
@@ -12,44 +13,82 @@ help: ## This help.
 
 .DEFAULT_GOAL := help
 
-prep:
+ifndef CI_BUILD_REF
+	CI_BUILD_REF = local
+endif
+
+prep: ## Cleanup tmp files
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
 	find . -type d -name '__pycache__' -delete 2>/dev/null || true
 	find . -type f -name '*.DS_Store' -delete 2>/dev/null || true
-	@rm *.zip *.whl || true
-	@rm -rf build || true
-	@rm -f bin/openssl* || true
+	@rm -f **/*.zip **/*.tar **/*.tgz **/*.gz
+	@rm -rf build python-libs
 
-python-libs: prep
+python-libs: prep ## download and install the trivialsec python libs locally (for IDE completions)
 	yes | pip uninstall -q trivialsec-common
-	aws --profile $(AWS_PROFILE) s3 cp --only-show-errors s3://$(BUCKET)/deploy-packages/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
-	aws --profile $(AWS_PROFILE) s3 cp --only-show-errors s3://$(BUCKET)/deploy-packages/$(COMMON_VERSION)/build.tgz build.tgz
-	tar -xzvf build.tgz
-	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
+	@$(shell git clone --depth 1 --branch ${COMMON_VERSION} --single-branch https://${DOCKER_USER}:${DOCKER_PASSWORD}@gitlab.com/trivialsec/python-common.git python-libs)
+	cd python-libs
+	make install
+install-deps: python-libs ## Just the minimal local deps for IDE completions
+	pip install -q -U pip setuptools wheel semgrep pylint
+	pip install -q -U --no-cache-dir --find-links=python-libs/build/wheel --no-index --isolated -r requirements.txt
 
-install-dev: python-libs
-	pip install -q -U pip setuptools wheel
-	pip install -q -U --no-cache-dir --isolated -r ./docker/requirements.txt
-
-lint:
-	pylint --jobs=0 --persistent=y --errors-only src/**/*.py
+test-local: ## Prettier test outputs
+	pylint --exit-zero -f colorized --persistent=y -r y --jobs=0 src/**/*.py
 	semgrep -q --strict --timeout=0 --config=p/r2c-ci --lang=py src/**/*.py
 
-build: ## Build compressed container
-	docker-compose build --compress
+pylint-ci: ## run pylint for CI
+	pylint --exit-zero --persistent=n -f json -r n --jobs=0 --errors-only src/**/*.py > pylint.json
 
-buildnc: package ## Clean build docker
-	docker-compose build --no-cache --compress
+semgrep-sast-ci: ## run core semgrep rules for CI
+	semgrep --disable-version-check -q --strict --error -o semgrep-ci.json --json --timeout=0 --config=p/r2c-ci --lang=py src/**/*.py
 
-rebuild: down build
+test-all: semgrep-sast-ci pylint-ci ## Run all CI tests
+
+build-metadata: ## Builds metadata image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/metadata:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/metadata:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		-f docker/metadata/Dockerfile .
+
+build: build-metadata ## Builds all images
+
+push-metadata-tagged: ## Push tagged metadata image
+	docker push -q $(REPO_ORG)/metadata:${CI_BUILD_REF}
+
+push-tagged: push-metadata-tagged ## Push tagged images
+
+push-metadata-ci: ## Push latest metadata image using docker cli directly for CI
+	docker tag $(REPO_ORG)/metadata:${CI_BUILD_REF} $(REPO_ORG)/metadata:latest
+	docker push -q $(REPO_ORG)/metadata:latest
+
+push-ci: push-metadata-ci ## Push latest images
+
+pull-base: ## pulls latest base image
+	docker pull -q registry.gitlab.com/trivialsec/containers-common/python:latest
+
+build-ci: pull pull-base build ## Builds from latest base image
+
+pull: ## pulls latest image
+	docker pull -q $(REPO_ORG)/metadata:latest || true
+
+rebuild: down build-ci ## Brings down the stack and builds it anew
+
+docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
+	@echo $(shell [ -z "${DOCKER_PASSWORD}" ] && echo "DOCKER_PASSWORD missing" )
+	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
-	docker-compose up -d
+	docker-compose up -d metadata
 
 down: ## Stop the app
 	@docker-compose down --remove-orphans
 
-restart: down run
+restart: down up ## restarts the app
 
 dep-openssl:
 	[ -f build/$(OPENSSL_PKG) ] || wget -q $(TESTSSL_URL)/$(OPENSSL_PKG) -O build/$(OPENSSL_PKG)
@@ -87,8 +126,3 @@ dep-testssl:
 	tar --exclude '*.DS_Store' -rf build/testssl.tar -C build testssl
 	gzip -f9 build/testssl.tar
 	ls -l --block-size=M build/testssl.tar.gz
-
-package-upload: ## uploads distribution to s3
-	aws --profile $(AWS_PROFILE) s3 cp build/openssl.tar.gz s3://$(BUCKET)/deploy-packages/$(COMMON_VERSION)/openssl.tar.gz
-	aws --profile $(AWS_PROFILE) s3 cp build/testssl.tar.gz s3://$(BUCKET)/deploy-packages/$(COMMON_VERSION)/testssl.tar.gz
-	aws --profile $(AWS_PROFILE) s3 cp build/amass.tar.gz s3://$(BUCKET)/deploy-packages/$(COMMON_VERSION)/amass.tar.gz

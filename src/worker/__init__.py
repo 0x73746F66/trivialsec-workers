@@ -437,7 +437,7 @@ def handle_error(err, job: JobRun):
     if hasattr(job, 'domain'):
         url=f'/domain/{job.domain.domain_id}/jobs'
     else:
-        url=f'/scope/{job.project_id}'
+        url=f'/project/{job.project_id}'
 
     Notification(
         account_id=job.account_id,

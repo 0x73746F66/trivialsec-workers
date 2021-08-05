@@ -1,7 +1,6 @@
 version: '3.6'
 x-defaults: &defaults
   env_file: .env
-  # network_mode: host
   restart: unless-stopped
   logging:
     options:
@@ -9,43 +8,42 @@ x-defaults: &defaults
       max-file: "3"
 
 services:
-  worker:
+  metadata:
     <<: *defaults
-    image: trivialsec/worker
+    container_name: metadata
+    image: "registry.gitlab.com/trivialsec/workers/metadata:${IMAGE_TAG:-latest}"
     # entrypoint: "bash -c 'tail -f /dev/null'"
-    build:
-      network: trivialsec
-      context: ./
-      dockerfile: docker/Dockerfile
-      args:
-        COMMON_VERSION: ${COMMON_VERSION}
-        PYTHONDEBUG: 1
-        PYTHONUNBUFFERED: 1
-        PYTHONUTF8: 1
-        PYTHONCOERCECLOCALE: warn
-        CFLAGS: '-O0'
-        STATICBUILD: 1
-        LC_ALL: C.UTF-8
-        LANG: C.UTF-8
-        OPENSSL_PKG: ${OPENSSL_PKG}
-        AWS_ACCESS_KEY_ID: ${TF_VAR_aws_access_key_id}
-        AWS_SECRET_ACCESS_KEY: ${TF_VAR_aws_secret_access_key}
-      environment:
+    environment:
       - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
     volumes:
-      - ./bin:/srv/app/lib/bin
-      - ./src/amass:/srv/app/amass
-      - ./src/drill:/srv/app/drill
       - ./src/metadata:/srv/app/metadata
-      - ./src/nmap:/srv/app/nmap
-      - ./src/testssl:/srv/app/testssl
-      - ./src/threatintel:/srv/app/threatintel
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
-      - ./src/config-local.yaml:/srv/app/config-local.yaml
+      - ./docker/conf/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+  testssl:
+    <<: *defaults
+    image: trivialsec/worker/testssl
+    # entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+    volumes:
+      - ./docker/drill/bin:/srv/app/lib/bin
+      - ./src/testssl:/srv/app/testssl
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/conf/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
     networks:
-      - default
+      default:
+        aliases:
+          - metadata
 
 networks:
   default:
