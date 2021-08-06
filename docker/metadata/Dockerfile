@@ -7,7 +7,6 @@ ARG COMMON_VERSION
 ARG BUILD_ENV
 ARG GITLAB_USER
 ARG GITLAB_PASSWORD
-ARG OPENSSL_PKG
 
 ENV PYTHONPATH ${PYTHONPATH}
 ENV APP_ENV ${APP_ENV}
@@ -17,7 +16,6 @@ ENV AWS_ACCESS_KEY_ID ${AWS_ACCESS_KEY_ID}
 ENV AWS_SECRET_ACCESS_KEY ${AWS_SECRET_ACCESS_KEY}
 ENV CONFIG_FILE ${CONFIG_FILE}
 ENV LOG_LEVEL ${LOG_LEVEL}
-ENV PATH ${PATH}:/srv/app/.local/bin
 
 RUN touch /tmp/application.log \
     && echo "Cloning python-libs from Gitlab" \
@@ -38,5 +36,4 @@ COPY --chown=trivialsec:trivialsec src/metadata metadata
 COPY --chown=trivialsec:trivialsec src/main.py main.py
 COPY --chown=trivialsec:trivialsec src/s3_upload.py s3_upload.py
 
-ENTRYPOINT "/bin/bash"
 CMD ["circusd", "--logger-config", "circusd-logger.yaml", "--log-level", "INFO", "circus.ini"]

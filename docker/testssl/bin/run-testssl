@@ -21,7 +21,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/srv/app/lib
 cd /tmp
 
 start_time="$(date -u +%s)"
-/testssl/testssl $additional_args \
+testssl $additional_args \
     --quiet \
     --mode parallel \
     --std \

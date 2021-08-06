@@ -50,7 +50,7 @@ def process(job: JobRun, job_args :list) -> bool:
         proc = Popen(job_args)
         retcode = proc.poll()
         while retcode is None:
-            time.sleep(config.get('queue_wait_timeout', 3))
+            time.sleep(config.queue_wait_timeout or 3)
             retcode = proc.poll()
     except Exception as err:
         logger.critical(err)

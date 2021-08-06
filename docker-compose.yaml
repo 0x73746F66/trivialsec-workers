@@ -12,7 +12,7 @@ services:
     <<: *defaults
     container_name: metadata
     image: "registry.gitlab.com/trivialsec/workers/metadata:${IMAGE_TAG:-latest}"
-    entrypoint: "bash -c 'tail -f /dev/null'"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
       - LOG_LEVEL=${LOG_LEVEL}
@@ -31,15 +31,17 @@ services:
 
   testssl:
     <<: *defaults
-    image: trivialsec/worker/testssl
+    container_name: testssl
+    image: "registry.gitlab.com/trivialsec/workers/testssl:${IMAGE_TAG:-latest}"
     # entrypoint: "bash -c 'tail -f /dev/null'"
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
-      - LOG_LEVEL=${LOG_LEVEL}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
       - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+      - TESTSSL_INSTALL_DIR=${TESTSSL_INSTALL_DIR:-/testssl}
     volumes:
-      - ./docker/drill/bin:/srv/app/lib/bin
+      - ./docker/testssl/bin:/srv/app/lib/bin
       - ./src/testssl:/srv/app/testssl
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
@@ -49,6 +51,28 @@ services:
       default:
         aliases:
           - testssl
+
+  drill:
+    <<: *defaults
+    container_name: drill
+    image: "registry.gitlab.com/trivialsec/workers/drill:${IMAGE_TAG:-latest}"
+    entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+    volumes:
+      - ./docker/drill/bin:/srv/app/lib/bin
+      - ./src/drill:/srv/app/drill
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - drill
 
 networks:
   default:

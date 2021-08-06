@@ -19,11 +19,10 @@ class Worker(WorkerInterface):
         super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
-        target = self.job.queue_data.target
         filename = path.realpath(path.join(
             self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.paths.get("worker_id")}.csv',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.csv',
         ))
 
         return filename
@@ -32,7 +31,7 @@ class Worker(WorkerInterface):
         return path.realpath(path.join(
             self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.paths.get("worker_id")}.log',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.log',
         ))
 
     def get_archive_files(self) -> dict:
