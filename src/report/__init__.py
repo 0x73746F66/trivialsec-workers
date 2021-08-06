@@ -2,8 +2,8 @@ from worker import WorkerInterface
 
 
 class Worker(WorkerInterface):
-    def __init__(self, job, config :dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_job_exe_path(self) -> str:
         return 'date'

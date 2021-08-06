@@ -69,8 +69,8 @@ RUN chown -R trivialsec: \
 USER trivialsec
 COPY docker/requirements.txt /srv/app/requirements.txt
 COPY docker/circus.ini /srv/app/circus.ini
-RUN python3.8 -m pip install -q --user --no-cache-dir --find-links=/srv/app/build/wheel --no-index /srv/app/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
-RUN python3.8 -m pip install -U --user --no-cache-dir --isolated -r /srv/app/requirements.txt
+RUN python3 -m pip install -q --user --no-cache-dir --find-links=/srv/app/build/wheel --no-index /srv/app/trivialsec_common-${COMMON_VERSION}-py2.py3-none-any.whl
+RUN python3 -m pip install -U --user --no-cache-dir --isolated -r /srv/app/requirements.txt
 
 USER root
 RUN cp -nr /amass/amass_linux_amd64/amass /usr/local/bin/amass

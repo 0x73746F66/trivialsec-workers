@@ -1,25 +1,20 @@
 ---
 app:
-  env: Dev
   version: 21.6.28
-  log_file: /tmp/application.log
-  log_level: DEBUG
   frontend:
-    asset_scheme: "http://"
-    asset_domain: localhost:8080
-    site_scheme: "http://"
-    site_domain: localhost:8080
-    app_scheme: "http://"
-    app_domain: localhost:5000
-    api_scheme: "http://"
-    api_domain: localhost:5081
-    socket_scheme: "http://"
-    socket_domain: localhost:5080
+    asset_scheme: "https://"
+    asset_domain: assets.trivialsec
+    site_scheme: "https://"
+    site_domain: www.trivialsec
+    app_scheme: "https://"
+    app_domain: app.trivialsec
+    api_scheme: "https://"
+    api_domain: api.trivialsec
+    socket_scheme: "wss://"
+    socket_domain: ws.trivialsec
   backend:
     socket_scheme: "http://"
     socket_domain: push-service:5080
-  cve:
-    url: http://search:5180
   nameservers:
     - 1.1.1.1     # Cloudflare
     - 8.8.8.8     # Google
@@ -53,9 +48,8 @@ mysql:
 aws:
   region_name: ap-southeast-2
   archive_bucket: archive-trivialsec
-  archive_object_prefix: dev/
   public_bucket: assets-trivialsec
-  public_object_prefix: dev/
+  env_prefix: dev
 
 sendgrid:
   templates:

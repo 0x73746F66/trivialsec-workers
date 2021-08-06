@@ -1,5 +1,6 @@
 from os import path, getcwd
 from xml.etree import ElementTree # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
+import logging
 import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
@@ -9,7 +10,6 @@ from trivialsec.models.finding import Finding
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 from trivialsec.helpers.transport import Metadata
 from trivialsec.helpers.config import config
-from gunicorn.glogging import logging
 from worker import WorkerInterface
 
 
@@ -220,24 +220,24 @@ class Worker(WorkerInterface):
     ]
     _raw = None
 
-    def __init__(self, job, config :dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         target = self.job.queue_data.target
         filename = path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.config.get("worker_id")}.txt',
+            f'{self.job.queue_data.scan_type}-{target}-{self.paths.get("worker_id")}.txt',
         ))
 
         return filename
 
     def get_log_filename(self) -> str:
         return path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.config.get("worker_id")}.log',
+            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.paths.get("worker_id")}.log',
         ))
 
     def get_archive_files(self) -> dict:
@@ -265,7 +265,7 @@ class Worker(WorkerInterface):
                 args.append((self.job.queue_data.target, dns_resolver))
             return args
 
-        dns_resolver = self.config.get('external_dsn_provider')
+        dns_resolver = self.paths.get('external_dsn_provider')
         return [(self.job.queue_data.target, dns_resolver)]
 
     def post_job_exe(self) -> bool:

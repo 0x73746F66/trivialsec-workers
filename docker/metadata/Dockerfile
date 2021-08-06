@@ -28,15 +28,15 @@ RUN touch /tmp/application.log \
     && echo "Clean up..." \
     && rm -rf /tmp/trivialsec
 
-COPY --chown=trivialsec:trivialsec docker/conf/circusd-logger.yaml circusd-logger.yaml
-COPY --chown=trivialsec:trivialsec docker/conf/circus-${BUILD_ENV}.ini circus.ini
-COPY --chown=trivialsec:trivialsec docker/conf/config-${BUILD_ENV}.yaml config.yaml
+COPY --chown=trivialsec:trivialsec docker/circusd-logger.yaml circusd-logger.yaml
+COPY --chown=trivialsec:trivialsec docker/config-${BUILD_ENV}.yaml config.yaml
+COPY --chown=trivialsec:trivialsec docker/metadata/circus-${BUILD_ENV}.ini circus.ini
 COPY --chown=trivialsec:trivialsec requirements.txt .
-RUN python3 -m pip install -q -U --no-cache-dir -r /srv/app/requirements.txt
+RUN python3 -m pip install -q -U --no-cache-dir -r requirements.txt
 COPY --chown=trivialsec:trivialsec src/worker worker
 COPY --chown=trivialsec:trivialsec src/metadata metadata
 COPY --chown=trivialsec:trivialsec src/main.py main.py
 COPY --chown=trivialsec:trivialsec src/s3_upload.py s3_upload.py
 
-ENTRYPOINT [ "/srv/app/.local/bin/circusd" ]
-CMD [ "--logger-config", "circusd-logger.yaml", "--log-level", "INFO", "circus.ini" ]
+ENTRYPOINT "/bin/bash"
+CMD ["circusd", "--logger-config", "circusd-logger.yaml", "--log-level", "INFO", "circus.ini"]

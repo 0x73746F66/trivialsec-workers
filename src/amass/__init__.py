@@ -1,9 +1,9 @@
 import os
 import errno
 import json
+import logging
 from socket import getaddrinfo, AF_INET6, AF_INET
 from os import path, getcwd
-from gunicorn.glogging import logging
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
@@ -13,14 +13,14 @@ from worker import WorkerInterface
 logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
-    def __init__(self, job, config :dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.config.get("worker_id")}.json'))
+        filename = path.realpath(path.join(self.paths.get('job_path'), self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.json'))
 
         return filename
 
@@ -28,7 +28,7 @@ class Worker(WorkerInterface):
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.config['job_path'], self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.config.get("worker_id")}.log'))
+        filename = path.realpath(path.join(self.paths.get('job_path'), self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.log'))
 
         return filename
 
@@ -43,7 +43,7 @@ class Worker(WorkerInterface):
         return path.realpath(path.join(getcwd(), 'lib', 'bin', 'run-amass'))
 
     def _make_conf_path(self) -> str:
-        return path.realpath(path.join(self.config['job_path'], f'{self.job.queue_data.scan_type}-{self.job.domain.name}.ini'))
+        return path.realpath(path.join(self.paths.get('job_path'), f'{self.job.queue_data.scan_type}-{self.job.domain.name}.ini'))
 
     def pre_job_exe(self) -> bool:
         config_filepath = self._make_conf_path()
@@ -53,16 +53,16 @@ class Worker(WorkerInterface):
         elif self.job.queue_data.is_active:
             amass_config.append('mode = active')
         amass_config.extend([
-            f'output_directory = {self.config["amass"].get("output_directory")}',
-            f'maximum_dns_queries = {self.config["amass"].get("maximum_dns_queries", 20000)}',
+            f'output_directory = {self.paths.get('amass').get("output_directory")}',
+            f'maximum_dns_queries = {self.paths.get('amass').get("maximum_dns_queries", 20000)}',
             '[scope]',
             '[scope.domains]',
             f'domain = {self.job.domain.name}',
             '[resolvers]',
-            f'public_dns_resolvers = {"true" if self.config["amass"].get("public_dns_resolvers") else "false"}',
-            f'monitor_resolver_rate = {"true" if self.config["amass"].get("monitor_resolver_rate") else "false"}',
+            f'public_dns_resolvers = {"true" if self.paths.get('amass').get("public_dns_resolvers") else "false"}',
+            f'monitor_resolver_rate = {"true" if self.paths.get('amass').get("monitor_resolver_rate") else "false"}',
         ])
-        dns_resolvers = self.config.get('nameservers')
+        dns_resolvers = self.paths.get('nameservers')
         if self.job.account.config.nameservers and len(self.job.account.config.nameservers.split(',')) > 0:
             dns_resolvers = self.job.account.config.nameservers.splitlines()
         for nameserver in dns_resolvers:
@@ -73,23 +73,23 @@ class Worker(WorkerInterface):
             for blacklisted in self.job.account.config.blacklisted_domains.splitlines():
                 amass_config.append(f'subdomain = {blacklisted}')
 
-        if self.job.queue_data.is_active and self.config["amass"].get("bruteforce", {}).get("enabled"):
+        if self.job.queue_data.is_active and self.paths.get('amass').get("bruteforce", {}).get("enabled"):
             amass_config.extend([
                 '[bruteforce]',
                 'enabled = true',
             ])
-            if self.config["amass"].get("bruteforce", {}).get("wordlist_file"):
-                amass_config.append(f'wordlist_file = {self.config["amass"].get("bruteforce", {}).get("wordlist_file")}')
+            if self.paths.get('amass').get("bruteforce", {}).get("wordlist_file"):
+                amass_config.append(f'wordlist_file = {self.paths.get('amass').get("bruteforce", {}).get("wordlist_file")}')
 
-        if self.job.queue_data.is_active and self.config["amass"].get("alterations", {}).get("enabled"):
+        if self.job.queue_data.is_active and self.paths.get('amass').get("alterations", {}).get("enabled"):
             amass_config.extend([
                 '[alterations]',
                 'enabled = true',
-                f'add_numbers = {"true" if self.config["amass"].get("alterations", {}).get("add_numbers") else "false"}',
+                f'add_numbers = {"true" if self.paths.get('amass').get("alterations", {}).get("add_numbers") else "false"}',
             ])
         amass_config.extend([
             '[data_sources]',
-            f'minimum_ttl = {self.config["amass"].get("sources_minimum_ttl", 1440)}'
+            f'minimum_ttl = {self.paths.get('amass').get("sources_minimum_ttl", 1440)}'
         ])
         open_data_sources = [
             'anubis',
@@ -118,7 +118,7 @@ class Worker(WorkerInterface):
             'yahoo',
         ]
         disabled = []
-        sources = self.config['amass'].get('sources', {})
+        sources = self.paths.get('amass', {}).get('sources', {})
         for source, conf in sources.items():
             if conf.get('disabled'):
                 disabled.append(conf.get('name'))

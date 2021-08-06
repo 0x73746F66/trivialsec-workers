@@ -5,8 +5,8 @@ dirhunt --progress-disabled --max-depth 24 --not-allow-redirects --to-file dirhu
 
 class Worker(WorkerInterface):
     updated = False
-    def __init__(self, job, config :dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         return ''

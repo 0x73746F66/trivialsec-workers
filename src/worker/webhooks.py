@@ -1,12 +1,12 @@
 from os import path
 from urllib.parse import urlsplit
 from datetime import datetime
+import logging
 import hmac
 import hashlib
 import json
 import requests
 from retry.api import retry
-from gunicorn.glogging import logging
 from trivialsec.models.webhook import Webhooks
 
 

@@ -1,15 +1,14 @@
-from importlib import invalidate_caches
-import tldextract
 from datetime import datetime
-from gunicorn.glogging import logging
+import logging
+import tldextract
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.models.member import Member
-from trivialsec.services.jobs import QueueData, queue_job as service_queue_job
+from trivialsec.services.jobs import queue_job as service_queue_job
 from trivialsec.models import UpdateTable
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
 from trivialsec.models.job_run import JobRun, JobRuns
-from trivialsec.models.domain import DomainStat
+from trivialsec.models.domain import Domain
 from trivialsec.models.domain_stat import DomainStat
 from trivialsec.models.finding import Finding
 from trivialsec.models.security_alert import SecurityAlert
@@ -22,7 +21,7 @@ from worker.sockets import send_event
 logger = logging.getLogger(__name__)
 
 class WorkerInterface:
-    config = None
+    paths :dict
     job: JobRun = None
     report_template_types = {
         'findings': Finding,
@@ -55,11 +54,11 @@ class WorkerInterface:
         'updates': [],
     }
 
-    def __init__(self, job: JobRun, config :dict):
+    def __init__(self, job: JobRun, paths :dict):
         if isinstance(job, JobRun):
             self.job = job
-        if isinstance(config, dict):
-            self.config = config
+        if isinstance(paths, dict):
+            self.paths = paths
 
     def analyse_report(self):
         "Some final tasks after everything else has finished"

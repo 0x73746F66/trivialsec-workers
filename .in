@@ -28,5 +28,5 @@ if [[ -f "$(which git-secrets 2>/dev/null)" ]]; then
 else
   echo -e "\033[0;31mPlease install git-secrets \033[0m"
 fi
-make install-dev
-make lint
+make install-deps
+make test-local

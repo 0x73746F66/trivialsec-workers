@@ -1,14 +1,6 @@
-from os import path, isatty, makedirs
-# from datetime import datetime
-# import errno
-# import time
+import logging
 import sys
-import json
 import argparse
-from gunicorn.glogging import logging
-from trivialsec import models
-# from worker.sockets import close_socket
-
 
 logger = logging.getLogger(__name__)
 

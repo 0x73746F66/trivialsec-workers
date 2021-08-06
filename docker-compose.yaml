@@ -12,7 +12,7 @@ services:
     <<: *defaults
     container_name: metadata
     image: "registry.gitlab.com/trivialsec/workers/metadata:${IMAGE_TAG:-latest}"
-    # entrypoint: "bash -c 'tail -f /dev/null'"
+    entrypoint: "bash -c 'tail -f /dev/null'"
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
       - LOG_LEVEL=${LOG_LEVEL}
@@ -23,7 +23,12 @@ services:
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
-      - ./docker/conf/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - metadata
+
   testssl:
     <<: *defaults
     image: trivialsec/worker/testssl
@@ -39,11 +44,11 @@ services:
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
-      - ./docker/conf/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
     networks:
       default:
         aliases:
-          - metadata
+          - testssl
 
 networks:
   default:

@@ -1,11 +1,10 @@
 SHELL := /bin/bash
 -include .env
 export $(shell sed 's/=.*//' .env)
-
 REPO_ORG = registry.gitlab.com/trivialsec/workers
 TESTSSL_URL = https://testssl.sh
 BUCKET = tfplans-trivialsec
-
+.ONESHELL:
 .PHONY: help
 
 help: ## This help.
@@ -31,7 +30,7 @@ python-libs: prep ## download and install the trivialsec python libs locally (fo
 	make install
 install-deps: python-libs ## Just the minimal local deps for IDE completions
 	pip install -q -U pip setuptools wheel semgrep pylint
-	pip install -q -U --no-cache-dir --find-links=python-libs/build/wheel --no-index --isolated -r requirements.txt
+	pip install -q -U -r requirements.txt
 
 test-local: ## Prettier test outputs
 	pylint --exit-zero -f colorized --persistent=y -r y --jobs=0 src/**/*.py

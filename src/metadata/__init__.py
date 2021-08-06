@@ -1,16 +1,15 @@
 from datetime import datetime
-import re
 import json
 import requests
 import tldextract
+import logging
 from bs4 import BeautifulSoup as bs
 from trivialsec.models.domain import Domain
 from trivialsec.models.domain_stat import DomainStat
-from trivialsec.models.inventory import InventoryItems
 from trivialsec.models.program import Program
+from trivialsec.models.inventory import InventoryItem
 from trivialsec.helpers import extract_server_version
 from trivialsec.helpers.transport import Metadata, download_file
-from gunicorn.glogging import logging
 from trivialsec.helpers.config import config
 from worker import WorkerInterface
 
@@ -19,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     updated = False
-    def __init__(self, job, config :dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         return ''
@@ -261,12 +260,12 @@ class Worker(WorkerInterface):
                 hibp_verify = meta_tag.get("content")
             if hibp_verify is not None:
                 try:
-                    verifytxtrecord_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
-                    verifytxtrecord_data = f'Token={hibp_verify}'
-                    logger.debug(f'{verifytxtrecord_url} <= {verifytxtrecord_data}')
+                    verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
+                    verify_txt_record_data = f'Token={hibp_verify}'
+                    logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
                     res = requests.post(
-                        verifytxtrecord_url,
-                        data=verifytxtrecord_data,
+                        verify_txt_record_url,
+                        data=verify_txt_record_data,
                         headers={'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'},
                         timeout=3
                     )
