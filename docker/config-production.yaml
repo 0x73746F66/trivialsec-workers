@@ -1,0 +1,288 @@
+---
+app:
+  env: Prod
+  version: 21.6.28
+  log_file: /tmp/application.log
+  log_level: WARNING
+  frontend:
+    asset_scheme: "https://"
+    asset_domain: www.trivialsec.com
+    site_scheme: "https://"
+    site_domain: www.trivialsec.com
+    app_scheme: "https://"
+    app_domain: app.trivialsec.com
+    api_scheme: "https://"
+    api_domain: api.trivialsec.com
+    socket_scheme: "wss://"
+    socket_domain: ws.trivialsec.com
+  backend:
+    socket_scheme: "wss://"
+    socket_domain: ws.trivialsec.com
+  cve:
+    url: http://search:5180
+  nameservers:
+    - 169.254.169.253
+  nmap:
+    ports: 20-23,25,53,57,67-69,80,81,82,107-113,115,118-119,135,137-139,143,153,156,170,177,179,194,209,213,218,220,300,311,366,369-371,383,384,387,389,399,427,433,434,443-445,464,465,475,491,514,515,517,518,520,521,524,530-533,540,546-548,556,560,561,563-585,587,591,593,601,604,623,625,631,635,636,639,641,646-648,653-655,657,660,666,674,688,690,691,706,711,712,749-754,760,782,783,808,832,843,847,848,873,953-61000
+  public_endpoints:
+    - /confirmation
+    - /verify
+    - /login
+    - /logout
+    - /recovery
+  require_authz:
+    - /account/update-billing-email
+    - /account/update-email
+    - /recovery/regenerate-scratch
+
+redis:
+  host: master.trivialsec-prod-redis.4kjmta.apse2.cache.amazonaws.com
+  ssl: True
+  ttl: 300
+
+mysql:
+  database: trivialsec
+  user: trivialsec
+  host: trivialsec-main.c3qpuhf7bu2e.ap-southeast-2.rds.amazonaws.com
+
+aws:
+  region_name: ap-southeast-2
+  archive_bucket: archive-trivialsec
+  public_bucket: assets-trivialsec
+  env_prefix:
+
+sendgrid:
+  templates:
+    invitations: d-ddd501dd76634f12bdba7dfcee416270
+    registrations: d-1259c22153484803bdc4d6cb490571a6
+    subscriptions: d-14c95c71ba5f40deac27eb8e0bcd0373
+    updated_email: d-30f820fc0f8a4f4d9f0fd5592a7419b5
+    account_recovery: d-d6ec3c4db69b46cd8a4bf873ef03bf16
+    magic-link: d-c356f835c3b541d2ba76f5f50bb5a27b
+    recovery_request: d-11d132b6513749a48005d21cb56df2dc
+  groups:
+    notifications: 14193
+    focus_group: 14107
+    subscriptions: 14106
+    marketing: 14105
+  lists:
+    subscribers: a656c506-1a36-45ad-ad29-bb54db25ccd9
+    members: 7c88b8a4-9b7a-4a25-9b09-be3d3a0cdcf3
+    trials: 6d72d4a5-5e15-455f-9cd4-0f28a9f06e24
+
+stripe:
+  account: acct_1HTJBRGZtHTgMn6l
+  products:
+    enterprise:
+      product_id: prod_I3YKq0kh5u21Gy
+    standard:
+      product_id: prod_I3QXcZm1iVM4nZ
+      monthly: price_1HTJfyGZtHTgMn6lhohsngNb
+      yearly: price_1HTJfzGZtHTgMn6lUTHe2gbq
+    professional: 
+      product_id: prod_I3Qc8SWBstGEJg
+      monthly: price_1HTJkpGZtHTgMn6lgDC7UDf0
+      yearly: price_1HTJkpGZtHTgMn6l1xGWhRVb
+
+amass:
+  output_directory: /tmp
+  maximum_dns_queries: 20000
+  include_unresolvable: true
+  public_dns_resolvers: true
+  score_resolvers: true
+  monitor_resolver_rate: true
+  bruteforce:
+    enabled: true
+    wordlist_file: /srv/app/lib/wordlists/all.txt
+  alterations:
+    enabled: false
+    add_numbers: true
+  sources:
+    anubis:
+      name: Anubis
+      disabled: false
+      ttl: 10080
+    alienvault:
+      name: AlienVault
+      disabled: false
+      ttl: 10080
+    archivetoday:
+      name: ArchiveToday
+      disabled: false
+      ttl: 10080
+    ask:
+      name: Ask
+      disabled: true
+    baidu:
+      name: Baidu
+      disabled: true
+    binaryedge:
+      name: BinaryEdge
+      disabled: false
+      ttl: 10080
+    bgpview:
+      name: BGPView
+      disabled: false
+      ttl: 10080
+    bufferover:
+      name: BufferOver
+      disabled: false
+      ttl: 10080
+    builtwith:
+      name: BuiltWith
+      disabled: false
+      ttl: 10080
+    c99:
+      name: C99
+      disabled: false
+      ttl: 4320
+    commoncrawl:
+      name: CommonCrawl
+      disabled: false
+      ttl: 4320
+    censys:
+      name: Censys
+      disabled: false
+      ttl: 10080
+    certspotter:
+      name: CertSpotter
+      disabled: false
+      ttl: 10080
+    chaos:
+      name: Chaos
+      disabled: false
+      ttl: 4320
+    cloudflare:
+      name: Cloudflare
+      disabled: false
+    circl:
+      name: CIRCL
+      disabled: false
+      ttl: 10080
+    dnsdb:
+      name: DNSDB
+      disabled: false
+      ttl: 10080
+    dnstable:
+      name: DNSTable
+      disabled: false
+      ttl: 4320
+    facebookct:
+      name: FacebookCT
+      disabled: false
+      ttl: 4320
+    github:
+      name: GitHub
+      disabled: false
+      ttl: 4320
+    hackerone:
+      name: HackerOne
+      disabled: false
+      ttl: 4320
+    hackertarget:
+      name: HackerTarget
+      disabled: false
+      ttl: 4320
+    mnemonic:
+      name: Mnemonic
+      disabled: false
+      ttl: 10080
+    networksdb:
+      name: NetworksDB
+      disabled: false
+      ttl: 10080
+    passivetotal:
+      name: PassiveTotal
+      disabled: false
+      ttl: 10080
+    pastebin:
+      name: Pastebin
+      disabled: false
+      ttl: 10080
+    rapiddns:
+      name: RapidDNS
+      disabled: false
+      ttl: 4320
+    recondev:
+      name: ReconDev
+      disabled: false
+      ttl: 10080
+    riddler:
+      name: Riddler
+      disabled: false
+      ttl: 4320
+    securitytrails:
+      name: SecurityTrails
+      disabled: false
+      ttl: 1440
+    shodan:
+      name: Shodan
+      disabled: false
+      ttl: 10080
+    sitedossier:
+      name: SiteDossier
+      disabled: false
+      ttl: 4320
+    sonarsearch:
+      name: SonarSearch
+      disabled: false
+      ttl: 10080
+    spyse:
+      name: Spyse
+      disabled: false
+      ttl: 4320
+    sublist3rapi:
+      name: Sublist3rAPI
+      disabled: false
+      ttl: 4320
+    threatbook: # not in account_config table yet
+      name: ThreatBook
+      disabled: true
+      ttl: 10080
+    threatcrowd:
+      name: ThreatCrowd
+      disabled: false
+      ttl: 10080
+    threatminer:
+      name: ThreatMiner
+      disabled: false
+      ttl: 10080
+    twitter:
+      name: Twitter
+      disabled: false
+      ttl: 10080
+    umbrella:
+      name: Umbrella
+      disabled: false
+      ttl: 10080
+    urlscan:
+      name: URLScan
+      disabled: false
+      ttl: 10080
+    viewdns:
+      name: ViewDNS
+      disabled: false
+      ttl: 10080
+    virustotal:
+      name: VirusTotal
+      disabled: false
+      ttl: 10080
+    wayback:
+      name: Wayback
+      disabled: false
+      ttl: 10080
+    whoisxml:
+      name: WhoisXML
+      disabled: false
+      ttl: 10080
+    yahoo:
+      name: Yahoo
+      disabled: true
+    zetalytics:
+      name: ZETAlytics
+      disabled: false
+      ttl: 1440
+    zoomeye:
+      name: ZoomEye
+      disabled: false
+      ttl: 1440

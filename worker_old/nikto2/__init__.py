@@ -117,7 +117,7 @@ def active_recon_dast(job: Job)->(bool, str):
 
     return True, None
 
-def gather_report(job: Job, report: dict) -> tuple:
+def gather_report(job: Job, report :dict) -> tuple:
     report_file_path, _ = get_result_filename(job)
     with open(report_file_path, 'r') as r:
         log.info('reading report lines')

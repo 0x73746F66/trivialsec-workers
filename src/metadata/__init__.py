@@ -1,22 +1,25 @@
 from datetime import datetime
-import re
 import json
 import requests
 import tldextract
+import logging
 from bs4 import BeautifulSoup as bs
-from trivialsec.models.domain import Domain, DomainStat
-from trivialsec.models.program import Program, InventoryItem
+from trivialsec.models.domain import Domain
+from trivialsec.models.domain_stat import DomainStat
+from trivialsec.models.program import Program
+from trivialsec.models.inventory import InventoryItem
 from trivialsec.helpers import extract_server_version
 from trivialsec.helpers.transport import Metadata, download_file
-from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers.config import config
-from worker import WorkerInterface, queue_job
+from worker import WorkerInterface
 
+
+logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     updated = False
-    def __init__(self, job, config: dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         return ''
@@ -41,10 +44,10 @@ class Worker(WorkerInterface):
     def post_job_exe(self) -> bool:
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         return 'Updated metadata' if self.updated else 'No metadata'
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         self.report['domain_stats'] = self.job.domain.gather_stats()
         self.check_subject_alt_name()
         self.check_headers()
@@ -229,11 +232,11 @@ class Worker(WorkerInterface):
         except Exception as err:
             logger.warning(err)
 
-    def get_domian_monitor_token_dns(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_dns(self, hibp_verify_txt :str):
         hibp_token, _ = Metadata.get_txt_value(self.job.domain.name, hibp_verify_txt)
         return hibp_token
 
-    def get_domian_monitor_token_meta(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_meta(self, hibp_verify_txt :str):
         hibp_token = None
         try:
             verify_url = f'http://{self.job.domain.name}/{hibp_verify_txt}.txt'
@@ -246,7 +249,7 @@ class Worker(WorkerInterface):
             logger.warning(err)
         return hibp_token
 
-    def get_domian_monitor_token_file(self, hibp_verify_txt: str):
+    def get_domian_monitor_token_file(self, hibp_verify_txt :str):
         hibp_token = None
         html_content = self.job.domain._http_metadata._content # pylint: disable=protected-access
         if html_content is not None:
@@ -257,12 +260,12 @@ class Worker(WorkerInterface):
                 hibp_verify = meta_tag.get("content")
             if hibp_verify is not None:
                 try:
-                    verifytxtrecord_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
-                    verifytxtrecord_data = f'Token={hibp_verify}'
-                    logger.debug(f'{verifytxtrecord_url} <= {verifytxtrecord_data}')
+                    verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
+                    verify_txt_record_data = f'Token={hibp_verify}'
+                    logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
                     res = requests.post(
-                        verifytxtrecord_url,
-                        data=verifytxtrecord_data,
+                        verify_txt_record_url,
+                        data=verify_txt_record_data,
                         headers={'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'},
                         timeout=3
                     )

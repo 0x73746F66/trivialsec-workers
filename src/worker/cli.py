@@ -1,11 +1,13 @@
+import logging
 import argparse
 import sys
 import os
 import time
 from subprocess import Popen
-from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers.config import config
 
+
+logger = logging.getLogger(__name__)
 
 def get_options() -> dict:
     parser = argparse.ArgumentParser()
@@ -24,19 +26,19 @@ def get_options() -> dict:
         sys.exit(1)
 
     if args.custom_config is not None:
-        config.custom_config = args.custom_config
+        config.config_file = args.custom_config
         config.configure()
-    opts = {**args.__dict__, **config.__dict__}
+    opts = {**args.__dict__}
     if opts.get('worker_id') is None:
-        opts['worker_id'] = opts.get('node_id')
+        opts['worker_id'] = config.node_id
 
     return opts
 
-def s3_upload(source_path: str, destination_path: str) -> str:
+def s3_upload(source_path :str, destination_path :str) -> str:
     retcode = None
     json_response = ''
     params = [
-        'python3.8',
+        'python3',
         '-u',
         '-d',
         '/srv/app/s3_upload.py',

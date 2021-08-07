@@ -1,29 +1,28 @@
-from os import path, makedirs
+from os import getenv, path, makedirs
 from subprocess import Popen
 from datetime import datetime
+import logging
 import errno
 import signal
 import time
 import importlib
 import sys
 import json
-from trivialsec.helpers.config import config
-from trivialsec.helpers.log_manager import logger
 from trivialsec.helpers import check_domain_rules, oneway_hash
 from trivialsec.services.jobs import QueueData
 from trivialsec.models.job_run import JobRun, JobRuns
 from trivialsec.models.service_type import ServiceType
-from trivialsec.models.account import Account, AccountConfig
+from trivialsec.models.account import Account
+from trivialsec.models.account_config import AccountConfig
 from trivialsec.models.project import Project
 from trivialsec.models.domain import Domain
+from trivialsec.helpers.config import config
 from worker import update_state, handle_error
 from worker.cli import get_options, s3_upload
 from worker.sockets import close_socket
 
 
-logger.configure(log_level=config.log_level)
-logger.create_stream_logger()
-logger.create_file_logger(file_path=config.log_file)
+logger = logging.getLogger(__name__)
 options = get_options()
 
 def handle_signals(job: JobRun):
@@ -43,7 +42,7 @@ def handle_signals(job: JobRun):
     signal.signal(signal.SIGTSTP, handler) # ctrl+z
     signal.signal(signal.SIGINT, handler) # ctrl+c
 
-def process(job: JobRun, job_args: list) -> bool:
+def process(job: JobRun, job_args :list) -> bool:
     retcode = None
     error = 'Unknown'
     logger.info(' '.join(job_args))
@@ -51,7 +50,7 @@ def process(job: JobRun, job_args: list) -> bool:
         proc = Popen(job_args)
         retcode = proc.poll()
         while retcode is None:
-            time.sleep(options.get('queue_wait_timeout', 3))
+            time.sleep(config.queue_wait_timeout or 3)
             retcode = proc.poll()
     except Exception as err:
         logger.critical(err)
@@ -68,14 +67,14 @@ def process(job: JobRun, job_args: list) -> bool:
 
     return True
 
-def mkpath(filepath: str):
+def mkpath(filepath :str):
     try:
         makedirs(path.dirname(filepath))
     except OSError as exc: # EEXIST race condition
         if exc.errno != errno.EEXIST:
             raise
 
-def complete_job(job: JobRuns, report_summary: str, queue_data_path: str, queue_data_object_path: str):
+def complete_job(job: JobRuns, report_summary :str, queue_data_path :str, queue_data_object_path :str):
     job.completed_at = datetime.utcnow().isoformat()
     job.queue_data.completed_at = job.completed_at
     job.queue_data.report_summary = report_summary[:255]
@@ -96,7 +95,8 @@ def main(job: JobRun) -> bool:
             job.queue_data.target
         )
         s3_path_prefix = path.join(
-            options["aws"].get("archive_object_prefix", "").strip(),
+            'reports',
+            config.aws.get("env_prefix", "dev").strip(),
             f'account-{job.account_id}',
             f'project-{job.project_id}',
             f'{job.queue_data.service_type_category}-{job.queue_data.service_type_id}'
@@ -132,11 +132,13 @@ def main(job: JobRun) -> bool:
         for args in worker.get_exe_args():
             update_state(job, ServiceType.STATE_PROCESSING, f'processing {job.queue_data.service_type_category}')
             job_args = [job_exe_path]
-            if report_path:
+            if report_path is not None:
                 job_args.append(report_path)
-            if log_path:
+            if log_path is not None:
                 job_args.append(log_path)
             job_args.extend(list(args))
+            logger.info(f'job_args {repr(job_args)}')
+            logger.info(f'args {repr(args)}')
             logger.debug(' '.join(job_args))
             if not process(job, job_args):
                 msg = f'Failed processing job {" ".join(job_args)}'
@@ -195,11 +197,16 @@ def main(job: JobRun) -> bool:
     return True
 
 if __name__ == "__main__":
+    loglevel = getenv('LOG_LEVEL', 'WARNING')
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - [%(levelname)s] %(message)s',
+        level=getattr(logging, loglevel.upper())
+    )
     # Get service
     current_service_type = ServiceType(name=options.get('service'))
     current_service_type.hydrate('name')
     # Find job
-    logger.info(f'checking {current_service_type.name} queue for service {options.get("node_id")} worker {options.get("worker_id")}')
+    logger.info(f'checking {current_service_type.name} queue for service {config.node_id} worker {options.get("worker_id")}')
     job_params = [('state', ServiceType.STATE_QUEUED), ('service_type_id', current_service_type.service_type_id)]
     if options.get('account_id') is not None:
         # validate plan
@@ -217,7 +224,7 @@ if __name__ == "__main__":
     current_job: JobRun = jobs[0]
     setattr(current_job, 'service_type', current_service_type)
     current_job.worker_id = options.get('worker_id')
-    current_job.node_id = options.get('node_id')
+    current_job.node_id = config.node_id
     current_job.type_id = current_service_type.service_type_id
     current_job.started_at = datetime.utcnow().isoformat()
     current_job.updated_at = current_job.started_at

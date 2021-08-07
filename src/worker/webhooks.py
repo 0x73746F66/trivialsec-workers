@@ -1,17 +1,19 @@
 from os import path
 from urllib.parse import urlsplit
 from datetime import datetime
+import logging
 import hmac
 import hashlib
 import json
 import requests
 from retry.api import retry
-from trivialsec.helpers.log_manager import logger
 from trivialsec.models.webhook import Webhooks
 
 
+logger = logging.getLogger(__name__)
+
 @retry((ConnectionError), tries=5)
-def send_webhook(account_id: int, event_name: str, data: dict, http_method: str = 'POST'):
+def send_webhook(account_id: int, event_name :str, data :dict, http_method :str = 'POST'):
     json_data = json.dumps(data, sort_keys=True, default=str)
     for webhook in Webhooks().find_by([('account_id', account_id), ('active', 1)]):
         target = urlsplit(webhook.target)

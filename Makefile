@@ -1,9 +1,10 @@
 SHELL := /bin/bash
 -include .env
 export $(shell sed 's/=.*//' .env)
-APP_NAME = worker
-LOCAL_CACHE = /tmp/trivialsec
-
+REPO_ORG = registry.gitlab.com/trivialsec/workers
+TESTSSL_URL = https://testssl.sh
+BUCKET = tfplans-trivialsec
+.ONESHELL:
 .PHONY: help
 
 help: ## This help.
@@ -11,115 +12,178 @@ help: ## This help.
 
 .DEFAULT_GOAL := help
 
-CMD_AWS := aws
-ifdef AWS_PROFILE
-CMD_AWS += --profile $(AWS_PROFILE)
-endif
-ifdef AWS_REGION
-CMD_AWS += --region $(AWS_REGION)
+ifndef CI_BUILD_REF
+	CI_BUILD_REF = local
 endif
 
-prep:
-	mkdir -p worker_datadir
+prep: ## Cleanup tmp files
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
 	find . -type d -name '__pycache__' -delete 2>/dev/null || true
 	find . -type f -name '*.DS_Store' -delete 2>/dev/null || true
-	@rm *.zip *.whl || true
-	@rm -rf build || true
-	@rm -f bin/openssl* || true
+	@rm -f **/*.zip **/*.tar **/*.tgz **/*.gz
+	@rm -rf python-libs
 
-common: prep
+python-libs: prep ## download and install the trivialsec python libs locally (for IDE completions)
 	yes | pip uninstall -q trivialsec-common
-	aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
-	aws s3 cp --only-show-errors s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/build.tgz build.tgz
-	tar -xzvf build.tgz
-	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
+	@$(shell git clone --depth 1 --branch ${COMMON_VERSION} --single-branch https://${DOCKER_USER}:${DOCKER_PASSWORD}@gitlab.com/trivialsec/python-common.git python-libs)
+	cd python-libs
+	make install
+install-deps: python-libs ## Just the minimal local deps for IDE completions
+	pip install -q -U pip setuptools wheel semgrep pylint
+	pip install -q -U -r requirements.txt
 
-common-dev: ## Install trivialsec_common lib from local build
-	yes | pip uninstall -q trivialsec-common
-	cp -fu $(LOCAL_CACHE)/build.tgz build.tgz
-	cp -fu $(LOCAL_CACHE)/trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
-	tar -xzvf build.tgz
-	pip install -q --no-cache-dir --find-links=build/wheel --no-index trivialsec_common-$(COMMON_VERSION)-py2.py3-none-any.whl
-
-install-dev: common
-	pip install -q -U pip setuptools pylint wheel awscli
-	pip install -q -U --no-cache-dir --isolated -r ./docker/requirements.txt
-
-lint:
-	pylint --jobs=0 --persistent=y --errors-only src/**/*.py
+test-local: ## Prettier test outputs
+	pylint --exit-zero -f colorized --persistent=y -r y --jobs=0 src/**/*.py
 	semgrep -q --strict --timeout=0 --config=p/r2c-ci --lang=py src/**/*.py
 
-build: package-dev ## Build compressed container
-	docker-compose build --compress
+pylint-ci: ## run pylint for CI
+	pylint --exit-zero --persistent=n -f json -r n --jobs=0 --errors-only src/**/*.py > pylint.json
 
-buildnc: package-dev ## Clean build docker
-	docker-compose build --no-cache --compress
+semgrep-sast-ci: ## run core semgrep rules for CI
+	semgrep --disable-version-check -q --strict --error -o semgrep-ci.json --json --timeout=0 --config=p/r2c-ci --lang=py src/**/*.py
 
-rebuild: down build
+test-all: semgrep-sast-ci pylint-ci ## Run all CI tests
 
-docker-clean: ## Fixes some issues with docker
-	docker rmi $(docker images -qaf "dangling=true")
-	yes | docker system prune
-	sudo service docker restart
+build-metadata: ## Builds metadata image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/metadata:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/metadata:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		-f docker/metadata/Dockerfile .
 
-docker-purge: ## tries to compeltely remove all docker files and start clean
-	docker rmi $(docker images -qa)
-	yes | docker system prune
-	sudo service docker stop
-	sudo rm -rf /tmp/docker.backup/
-	sudo cp -Pfr /var/lib/docker /tmp/docker.backup
-	sudo rm -rf /var/lib/docker
-	sudo service docker start
+build-testssl: dep-openssl dep-testssl ## Builds testssl image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/testssl:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/testssl:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/testssl/Dockerfile .
+
+build-drill: ## Builds drill image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/drill:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/drill:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/drill/Dockerfile .
+
+build-amass: dep-amass ## Builds amass image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/amass:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/amass:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/amass/Dockerfile .
+
+build: build-metadata build-testssl build-drill build-amass ## Builds all images
+
+push-metadata-tagged: ## Push tagged metadata image
+	docker push -q $(REPO_ORG)/metadata:${CI_BUILD_REF}
+
+push-testssl-tagged: ## Push tagged testssl image
+	docker push -q $(REPO_ORG)/testssl:${CI_BUILD_REF}
+
+push-drill-tagged: ## Push tagged drill image
+	docker push -q $(REPO_ORG)/drill:${CI_BUILD_REF}
+
+push-amass-tagged: ## Push tagged amass image
+	docker push -q $(REPO_ORG)/amass:${CI_BUILD_REF}
+
+push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged push-amass-tagged ## Push tagged images
+
+push-metadata-ci: ## Push latest metadata image using docker cli directly for CI
+	docker tag $(REPO_ORG)/metadata:${CI_BUILD_REF} $(REPO_ORG)/metadata:latest
+	docker push -q $(REPO_ORG)/metadata:latest
+
+push-testssl-ci: ## Push latest testssl image using docker cli directly for CI
+	docker tag $(REPO_ORG)/testssl:${CI_BUILD_REF} $(REPO_ORG)/testssl:latest
+	docker push -q $(REPO_ORG)/testssl:latest
+
+push-drill-ci: ## Push latest drill image using docker cli directly for CI
+	docker tag $(REPO_ORG)/drill:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
+	docker push -q $(REPO_ORG)/drill:latest
+
+push-amass-ci: ## Push latest amass image using docker cli directly for CI
+	docker tag $(REPO_ORG)/amass:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
+	docker push -q $(REPO_ORG)/amass:latest
+
+push-ci: push-metadata-ci push-testssl-ci push-drill-ci push-amass-ci ## Push latest images
+
+pull-base: ## pulls latest base image
+	docker pull -q registry.gitlab.com/trivialsec/containers-common/python:latest
+
+build-ci: pull pull-base build ## Builds from latest base image
+
+pull: ## pulls latest image
+	docker pull -q $(REPO_ORG)/metadata:latest || true
+	docker pull -q $(REPO_ORG)/testssl:latest || true
+	docker pull -q $(REPO_ORG)/drill:latest || true
+	docker pull -q $(REPO_ORG)/amass:latest || true
+
+rebuild: down build-ci ## Brings down the stack and builds it anew
+
+docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
+	@echo $(shell [ -z "${DOCKER_PASSWORD}" ] && echo "DOCKER_PASSWORD missing" )
+	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
-	docker-compose up -d $(APP_NAME)
+	docker-compose up -d metadata testssl drill amass
 
 down: ## Stop the app
-	@docker-compose down
+	@docker-compose down --remove-orphans
 
-restart: down run
+restart: down up ## restarts the app
 
-package:
-	mkdir -p build
-	@rm **/*.zip || true
-	zip -9rq build/$(APP_NAME).zip src bin -x '*.pyc' -x '__pycache__' -x '*.DS_Store'
-	zip -uj9q build/$(APP_NAME).zip docker/circus.ini docker/circusd-logger.yaml docker/requirements.txt
-	[ -f build/amass_linux_amd64.zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64.zip
-	[ -f build/$(OPENSSL_PKG) ] || wget -q https://testssl.sh/$(OPENSSL_PKG) -O build/$(OPENSSL_PKG)
+dep-openssl:
+	[ -f build/$(OPENSSL_PKG) ] || wget -q $(TESTSSL_URL)/$(OPENSSL_PKG) -O build/$(OPENSSL_PKG)
 	tar xvzf build/$(OPENSSL_PKG)
 	mv bin/openssl.Linux.x86_64.static bin/openssl
+	tar --exclude '*.DS_Store' -cf build/openssl.tar bin/openssl
+	gzip -f9 build/openssl.tar
+	ls -l --block-size=M build/openssl.tar.gz
+	rm -f bin/openssl*
+
+dep-amass:
+	[ -f build/amass_linux_amd64-$(AMASS_VERSION).zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64-$(AMASS_VERSION).zip
+	unzip -qo build/amass_linux_amd64-$(AMASS_VERSION).zip -d build/
+	mkdir -p build/amass_linux_amd64/examples/wordlists
+	[ -f build/amass_linux_amd64/examples/wordlists/all.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/all.txt -O build/amass_linux_amd64/examples/wordlists/all.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/deepmagic.com_top500prefixes.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/deepmagic.com_top500prefixes.txt -O build/amass_linux_amd64/examples/wordlists/deepmagic.com_top500prefixes.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/bitquark_subdomains_top100K.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/bitquark_subdomains_top100K.txt -O build/amass_linux_amd64/examples/wordlists/bitquark_subdomains_top100K.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt -O build/amass_linux_amd64/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt
+	tar --exclude '*.DS_Store' --exclude 'doc' --exclude 'LICENSE' --exclude 'README.md' -cf build/amass.tar -C build amass_linux_amd64
+	gzip -f9 build/amass.tar
+	ls -l --block-size=M build/amass.tar.gz
+
+dep-testssl:
 	[ -f build/testssl ] || wget -q https://raw.githubusercontent.com/drwetter/testssl.sh/3.1dev/testssl.sh -O build/testssl
 	chmod a+x build/testssl
 	mkdir -p build/etc
-	[ -f build/etc/Apple.pem ] || wget -q https://testssl.sh/etc/Apple.pem -O build/etc/Apple.pem
-	[ -f build/etc/Java.pem ] || wget -q https://testssl.sh/etc/Java.pem -O build/etc/Java.pem
-	[ -f build/etc/Linux.pem ] || wget -q https://testssl.sh/etc/Linux.pem -O build/etc/Linux.pem
-	[ -f build/etc/Microsoft.pem ] || wget -q https://testssl.sh/etc/Microsoft.pem -O build/etc/Microsoft.pem
-	[ -f build/etc/Mozilla.pem ] || wget -q https://testssl.sh/etc/Mozilla.pem -O build/etc/Mozilla.pem
-	[ -f build/etc/ca_hashes.txt ] || wget -q https://testssl.sh/etc/ca_hashes.txt -O build/etc/ca_hashes.txt
-	[ -f build/etc/cipher-mapping.txt ] || wget -q https://testssl.sh/etc/cipher-mapping.txt -O build/etc/cipher-mapping.txt
-	[ -f build/etc/client-simulation.txt ] || wget -q https://testssl.sh/etc/client-simulation.txt -O build/etc/client-simulation.txt
-	[ -f build/etc/client-simulation.wiresharked.txt ] || wget -q https://testssl.sh/etc/client-simulation.wiresharked.txt -O build/etc/client-simulation.wiresharked.txt
-	[ -f build/etc/common-primes.txt ] || wget -q https://testssl.sh/etc/common-primes.txt -O build/etc/common-primes.txt
-	[ -f build/etc/curves.txt ] || wget -q https://testssl.sh/etc/curves.txt -O build/etc/curves.txt
-	[ -f build/etc/tls_data.txt ] || wget -q https://testssl.sh/etc/tls_data.txt -O build/etc/tls_data.txt
-	zip -9rq build/openssl.zip bin/openssl
-	zip -9jrq build/testssl.zip build/etc
-	zip -uj9q build/testssl.zip build/testssl
-	rm -f bin/openssl*
-
-package-upload: prep package ## uploads distribution to s3
-	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/$(APP_NAME).zip
-	$(CMD_AWS) s3 cp build/openssl.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/openssl.zip
-	$(CMD_AWS) s3 cp build/testssl.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/testssl.zip
-	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://trivialsec-assets/deploy-packages/$(COMMON_VERSION)/amass_linux_amd64.zip
-
-package-dev-deps: package ## uploads distribution deps to s3
-	$(CMD_AWS) s3 cp build/$(APP_NAME).zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/$(APP_NAME).zip
-	$(CMD_AWS) s3 cp build/openssl.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/openssl.zip
-	$(CMD_AWS) s3 cp build/testssl.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/testssl.zip
-	$(CMD_AWS) s3 cp build/amass_linux_amd64.zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/amass_linux_amd64.zip
-
-package-dev: common-dev package
-	$(CMD_AWS) s3 cp --only-show-errors build/$(APP_NAME).zip s3://trivialsec-assets/dev/$(COMMON_VERSION)/$(APP_NAME).zip
+	[ -f build/etc/Apple.pem ] || wget -q $(TESTSSL_URL)/etc/Apple.pem -O build/etc/Apple.pem
+	[ -f build/etc/Java.pem ] || wget -q $(TESTSSL_URL)/etc/Java.pem -O build/etc/Java.pem
+	[ -f build/etc/Linux.pem ] || wget -q $(TESTSSL_URL)/etc/Linux.pem -O build/etc/Linux.pem
+	[ -f build/etc/Microsoft.pem ] || wget -q $(TESTSSL_URL)/etc/Microsoft.pem -O build/etc/Microsoft.pem
+	[ -f build/etc/Mozilla.pem ] || wget -q $(TESTSSL_URL)/etc/Mozilla.pem -O build/etc/Mozilla.pem
+	[ -f build/etc/ca_hashes.txt ] || wget -q $(TESTSSL_URL)/etc/ca_hashes.txt -O build/etc/ca_hashes.txt
+	[ -f build/etc/cipher-mapping.txt ] || wget -q $(TESTSSL_URL)/etc/cipher-mapping.txt -O build/etc/cipher-mapping.txt
+	[ -f build/etc/client-simulation.txt ] || wget -q $(TESTSSL_URL)/etc/client-simulation.txt -O build/etc/client-simulation.txt
+	[ -f build/etc/client-simulation.wiresharked.txt ] || wget -q $(TESTSSL_URL)/etc/client-simulation.wiresharked.txt -O build/etc/client-simulation.wiresharked.txt
+	[ -f build/etc/common-primes.txt ] || wget -q $(TESTSSL_URL)/etc/common-primes.txt -O build/etc/common-primes.txt
+	[ -f build/etc/curves.txt ] || wget -q $(TESTSSL_URL)/etc/curves.txt -O build/etc/curves.txt
+	[ -f build/etc/tls_data.txt ] || wget -q $(TESTSSL_URL)/etc/tls_data.txt -O build/etc/tls_data.txt
+	tar --exclude '*.DS_Store' -cf build/testssl.tar -C build etc
+	tar --exclude '*.DS_Store' -rf build/testssl.tar -C build testssl
+	gzip -f9 build/testssl.tar
+	ls -l --block-size=M build/testssl.tar.gz
