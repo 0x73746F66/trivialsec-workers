@@ -1,26 +1,27 @@
-from importlib import invalidate_caches
-import tldextract
-import re
 from datetime import datetime
-from trivialsec.helpers.log_manager import logger
+import logging
+import tldextract
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.models.member import Member
-from trivialsec.services.jobs import QueueData, queue_job as service_queue_job
+from trivialsec.services.jobs import queue_job as service_queue_job
 from trivialsec.models import UpdateTable
 from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
 from trivialsec.models.job_run import JobRun, JobRuns
-from trivialsec.models.domain import Domain, DomainStat
+from trivialsec.models.domain import Domain
+from trivialsec.models.domain_stat import DomainStat
 from trivialsec.models.finding import Finding
 from trivialsec.models.security_alert import SecurityAlert
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.models.dns_record import DnsRecord
-from trivialsec.models.program import Program, InventoryItem
+from trivialsec.models.inventory import InventoryItem
 from worker.sockets import send_event
 
 
+logger = logging.getLogger(__name__)
+
 class WorkerInterface:
-    config = None
+    paths :dict
     job: JobRun = None
     report_template_types = {
         'findings': Finding,
@@ -53,11 +54,11 @@ class WorkerInterface:
         'updates': [],
     }
 
-    def __init__(self, job: JobRun, config: dict):
+    def __init__(self, job: JobRun, paths :dict):
         if isinstance(job, JobRun):
             self.job = job
-        if isinstance(config, dict):
-            self.config = config
+        if isinstance(paths, dict):
+            self.paths = paths
 
     def analyse_report(self):
         "Some final tasks after everything else has finished"
@@ -80,7 +81,7 @@ class WorkerInterface:
 
         return result
 
-    def _save_findings(self, findings: list):
+    def _save_findings(self, findings :list):
         for finding in findings:
             cache_keys = []
             finding.account_id = self.job.account_id
@@ -123,7 +124,7 @@ class WorkerInterface:
                 'finding': finding_dict,
             })
 
-    def _save_security_alerts(self, security_alerts: list):
+    def _save_security_alerts(self, security_alerts :list):
         for security_alert in security_alerts:
             cache_keys = []
             security_alert.account_id = self.job.account_id
@@ -151,7 +152,7 @@ class WorkerInterface:
                 'alert': alert_dict,
             })
 
-    def _save_domain_stats(self, domain_stats: list):
+    def _save_domain_stats(self, domain_stats :list):
         for domain_stat in domain_stats:
             cache_keys = []
             exists_params = []
@@ -175,7 +176,7 @@ class WorkerInterface:
                         cache_keys.append(cache_key.format(domain_id=domain_stat.domain_id))
             domain_stat.persist(exists=exists, invalidations=cache_keys)
 
-    def _save_inventory_items(self, inventory_items: list):
+    def _save_inventory_items(self, inventory_items :list):
         for inventory_item in inventory_items:
             cache_keys = []
             inventory_item.account_id = self.job.account_id
@@ -209,7 +210,7 @@ class WorkerInterface:
                 'inventory': inventory_dict,
             })
 
-    def _save_domains(self, domains: list):
+    def _save_domains(self, domains :list):
         utcnow = datetime.utcnow()
         for domain in domains:
             cache_keys = []
@@ -283,7 +284,7 @@ class WorkerInterface:
                     'domain': domain_dict,
                 })
 
-    def _save_known_ips(self, known_ips: list):
+    def _save_known_ips(self, known_ips :list):
         for known_ip in known_ips:
             cache_keys = []
             if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
@@ -315,7 +316,7 @@ class WorkerInterface:
                 'ipaddr': ip_dict,
             })
 
-    def _save_dns_records(self, dns_records: list):
+    def _save_dns_records(self, dns_records :list):
         for dns_record in dns_records:
             if dns_record.answer in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
                 continue
@@ -343,7 +344,7 @@ class WorkerInterface:
                     'dns': dns_dict,
                 })
 
-    def _save_update_fields(self, updates: list):
+    def _save_update_fields(self, updates :list):
         for update_table in updates:
             update_table.persist()
 
@@ -389,16 +390,16 @@ class WorkerInterface:
     def post_job_exe(self) -> bool:
         "returns True when successful command verification passes"
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         "returns data to persist"
 
     def get_archive_files(self) -> dict:
         "returns file name amd paths of files to send to S3"
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         "returns a human readable summary"
 
-def update_state(job: JobRun, state: str, message: str = None):
+def update_state(job: JobRun, state :str, message :str = None):
     if message is not None:
         job.worker_message = message
     job.updated_at = datetime.utcnow().isoformat()
@@ -435,7 +436,7 @@ def handle_error(err, job: JobRun):
     if hasattr(job, 'domain'):
         url=f'/domain/{job.domain.domain_id}/jobs'
     else:
-        url=f'/scope/{job.project_id}'
+        url=f'/project/{job.project_id}'
 
     Notification(
         account_id=job.account_id,
@@ -443,7 +444,7 @@ def handle_error(err, job: JobRun):
         url=url,
     ).persist()
 
-def queue_job(original_job: JobRuns, name: str, target: str = None, scan_next: list = []):
+def queue_job(original_job: JobRuns, name :str, target :str = None, scan_next :list = []):
     target = target or original_job.queue_data.target
     service_type = ServiceType(name=name)
     service_type.hydrate(['name'])

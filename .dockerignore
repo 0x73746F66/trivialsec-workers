@@ -15,5 +15,7 @@ terraform.*
 .pylintrc
 Makefile
 README.md
-**/build/
+assets/
+deploy/
+**/*.tgz
 **/*.zip

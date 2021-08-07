@@ -27,7 +27,7 @@
 # def disconnect():
 #     logger.info("disconnected")
 
-# def send_event(event: str, data: dict, namespace: str = None):
+# def send_event(event: str, data :dict, namespace: str = None):
 #     if not sio.connected:
 #         sio.connect('http://sockets:5080')
 #     sio.emit(event, data, namespace=namespace)
@@ -231,7 +231,7 @@
 #     service.persist()
 #     send_event('update_service_state', data)
 
-# def main(opts: dict, service: ServiceType):
+# def main(opts :dict, service: ServiceType):
 #     logger.info(f'checking queue for service {opts.service}')
 #     check_feeds = Feeds().get_queued('threat_intel', limit=10)
 #     if not check_feeds:

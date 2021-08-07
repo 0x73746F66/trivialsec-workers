@@ -5,13 +5,13 @@ import boto3
 from trivialsec.helpers.config import config
 
 
-def main(options: dict):
+def main(options :dict):
     response = ''
     aws_session = boto3.Session(region_name=options['aws'].get('region_name'))
     s3_client = aws_session.client('s3')
     with open(options.get('source_path'), 'r') as buff:
         response = s3_client.put_object(
-            Bucket=options['aws'].get('archive_bucket'),
+            Bucket=options['aws'].get('public_bucket'),
             ACL='bucket-owner-full-control',
             Body=buff.read(),
             Key=options.get('dest_path').strip(),

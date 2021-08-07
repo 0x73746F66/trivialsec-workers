@@ -1,9 +1,11 @@
 import json
+import logging
 import socketio
 from retry.api import retry
-from trivialsec.helpers.log_manager import logger
-from worker.cli import get_options
+from trivialsec.helpers.config import config
 
+
+logger = logging.getLogger(__name__)
 
 sio = socketio.Client()
 
@@ -24,13 +26,12 @@ def close_socket():
     sio.disconnect()
 
 @retry((ConnectionError), tries=5)
-def send_event(event: str, data: dict):
-    options = get_options()
+def send_event(event :str, data :dict):
     if not sio.connected:
         try:
-            host = f"{options['backend'].get('socket_scheme')}{options['backend'].get('socket_domain')}"
+            host = f"{config.backend.get('socket_scheme')}{config.backend.get('socket_domain')}"
             logger.info(f'socketio.Client CONNECT {host}')
-            sio.connect(host)
+            sio.connect(host, transports=['websocket'])
 
         except Exception as err:
             raise ConnectionError from err

@@ -88,5 +88,4 @@ cert_dot_sh/*.csv.part
 *.zip
 *.tgz
 *.gz
-dirhunt.json
-worker_datadir/
+*.json

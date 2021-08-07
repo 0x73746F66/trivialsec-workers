@@ -1,7 +1,6 @@
 version: '3.6'
 x-defaults: &defaults
   env_file: .env
-  network_mode: host
   restart: unless-stopped
   logging:
     options:
@@ -9,40 +8,95 @@ x-defaults: &defaults
       max-file: "3"
 
 services:
-  worker:
+  metadata:
     <<: *defaults
-    image: trivialsec/worker
+    container_name: metadata
+    image: "registry.gitlab.com/trivialsec/workers/metadata:${IMAGE_TAG:-latest}"
     # entrypoint: "bash -c 'tail -f /dev/null'"
-    build:
-      context: ./
-      dockerfile: docker/Dockerfile
-      args:
-        COMMON_VERSION: ${COMMON_VERSION}
-        AWS_ACCOUNT: ${AWS_ACCOUNT}
-        AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-        AWS_REGION: ${AWS_REGION}
-        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-        PYTHONDEBUG: 1
-        PYTHONUNBUFFERED: 1
-        PYTHONUTF8: 1
-        PYTHONCOERCECLOCALE: warn
-        CFLAGS: '-O0'
-        STATICBUILD: 1
-        LC_ALL: C.UTF-8
-        LANG: C.UTF-8
-        OPENSSL_PKG: ${OPENSSL_PKG}
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
     volumes:
-      # - ./worker_datadir:/tmp
-      - ./bin:/srv/app/lib/bin
-      - ./src/amass:/srv/app/amass
-      - ./src/drill:/srv/app/drill
       - ./src/metadata:/srv/app/metadata
-      - ./src/nmap:/srv/app/nmap
-      - ./src/testssl:/srv/app/testssl
-      - ./src/threatintel:/srv/app/threatintel
       - ./src/worker:/srv/app/worker
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - metadata
+
+  testssl:
+    <<: *defaults
+    container_name: testssl
+    image: "registry.gitlab.com/trivialsec/workers/testssl:${IMAGE_TAG:-latest}"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+      - TESTSSL_INSTALL_DIR=${TESTSSL_INSTALL_DIR:-/testssl}
+    volumes:
+      - ./docker/testssl/bin:/srv/app/lib/bin
+      - ./src/testssl:/srv/app/testssl
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - testssl
+
+  drill:
+    <<: *defaults
+    container_name: drill
+    image: "registry.gitlab.com/trivialsec/workers/drill:${IMAGE_TAG:-latest}"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+    volumes:
+      - ./docker/drill/bin:/srv/app/lib/bin
+      - ./src/drill:/srv/app/drill
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - drill
+
+  amass:
+    <<: *defaults
+    container_name: amass
+    image: "registry.gitlab.com/trivialsec/workers/amass:${IMAGE_TAG:-latest}"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+    volumes:
+      - ./docker/amass/bin:/srv/app/lib/bin
+      - ./src/amass:/srv/app/amass
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - amass
+
+networks:
+  default:
+    external:
+      name: trivialsec
