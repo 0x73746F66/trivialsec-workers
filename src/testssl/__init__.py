@@ -1,34 +1,37 @@
 import re
+import logging
 from csv import reader
 from io import StringIO
 from os import path, getcwd
 from trivialsec.models.domain import Domain
-from trivialsec.models.finding import Finding, FindingDetail
-from trivialsec.models.program import Program, InventoryItem
+from trivialsec.models.finding_detail import FindingDetail
+from trivialsec.models.finding import Finding
+from trivialsec.models.inventory import InventoryItem
+from trivialsec.models.program import Program
 from trivialsec.helpers import extract_server_version, oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
-from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
 
+logger = logging.getLogger(__name__)
+
 class Worker(WorkerInterface):
-    def __init__(self, job, config: dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
-        target = self.job.queue_data.target
         filename = path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.config.get("worker_id")}.csv',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.csv',
         ))
 
         return filename
 
     def get_log_filename(self) -> str:
         return path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.config.get("worker_id")}.log',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.log',
         ))
 
     def get_archive_files(self) -> dict:
@@ -60,7 +63,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["findings"]) > 0:
@@ -77,7 +80,7 @@ class Worker(WorkerInterface):
 
         return summary
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         tls_tests = [ # match_text, bad test or title if good test, good
             ('Session Ticket RFC 5077 hint', 'no lifetime advertised', None, '96nX6l2Ee9sSmVg0e8KPa1u9fJL8tFirL6LVdyPplDg'),
             ('SSL Session ID support', None, 'no', '5GcfdkNtrLBU1ib..tTJ65af.goMx7RXV8ZUNxMj09M'),

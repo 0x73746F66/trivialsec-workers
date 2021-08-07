@@ -62,5 +62,5 @@ def post_job_exe(job: Job)->(bool, str):
 
     return True, None
 
-def build_report(job: Job, output: str, log_output: str, report: dict)->(dict, str):
+def build_report(job: Job, output :str, log_output :str, report :dict)->(dict, str):
     return report, None

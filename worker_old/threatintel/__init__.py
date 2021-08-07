@@ -29,9 +29,9 @@ def connect_error():
 def disconnect():
     log.info("disconnected")
 
-def send_event(event: str, data: dict, namespace: str = None):
+def send_event(event :str, data :dict, namespace :str = None):
     if not sio.connected:
-        sio.connect('http://sockets:5080')
+        sio.connect(config.socket_url)
     sio.emit(event, data, namespace=namespace)
 
 def get_customer_domains(domain_name):
@@ -60,7 +60,7 @@ def get_customer_ips(ip_address):
         offset += limit
     return ret
 
-def ipv4_dataplane(feed: Feed, content: str):
+def ipv4_dataplane(feed: Feed, content :str):
     for l in content.splitlines():
         line = l.strip()
         if line.startswith('#') or line.startswith('//') or line == '':
@@ -79,7 +79,7 @@ def ipv4_dataplane(feed: Feed, content: str):
                     if not alert.exists([('account_id', known_ip.account_id), ('description', desc)]):
                         alert.persist()
 
-def ipv4_haleys(feed: Feed, content: str):
+def ipv4_haleys(feed: Feed, content :str):
     for l in content.splitlines():
         line = l.strip()
         if line.startswith('#') or line.startswith('//') or line == '':
@@ -104,7 +104,7 @@ def ipv4_haleys(feed: Feed, content: str):
                     if not alert.exists([('account_id', known_ip.account_id), ('description', desc)]):
                         alert.persist()
 
-def ipv4_list(feed: Feed, content: str):
+def ipv4_list(feed: Feed, content :str):
     for l in content.splitlines():
         ipaddr = l.strip()
         if ipaddr.startswith('#') or ipaddr.startswith('//') or ipaddr == '':
@@ -118,7 +118,7 @@ def ipv4_list(feed: Feed, content: str):
                     if not alert.exists([('account_id', known_ip.account_id), ('description', desc)]):
                         alert.persist()
 
-def ipv4_bruteforceblocker(feed: Feed, content: str):
+def ipv4_bruteforceblocker(feed: Feed, content :str):
     for l in content.splitlines():
         line = l.strip()
         if line.startswith('#') or line.startswith('//') or line == '':
@@ -135,7 +135,7 @@ def ipv4_bruteforceblocker(feed: Feed, content: str):
                     if not alert.exists([('account_id', known_ip.account_id), ('description', desc)]):
                         alert.persist()
 
-def csv_malwaredomains(feed: Feed, content: str):
+def csv_malwaredomains(feed: Feed, content :str):
     for l in content.splitlines():
         line = l.strip()
         if line.startswith('#') or line.startswith('//') or line == '':
@@ -148,7 +148,7 @@ def csv_malwaredomains(feed: Feed, content: str):
             if not alert.exists([('account_id', domain.account_id), ('description', desc)]):
                 alert.persist()
 
-def url_list(feed: Feed, content: str):
+def url_list(feed: Feed, content :str):
     for l in content.splitlines():
         url = l.strip()
         if url.startswith('#') or url.startswith('//') or url == '':
@@ -163,7 +163,7 @@ def url_list(feed: Feed, content: str):
             if not alert.exists([('account_id', domain.account_id), ('description', desc)]):
                 alert.persist()
 
-def csv_urlhaus(feed: Feed, content: str):
+def csv_urlhaus(feed: Feed, content :str):
     for l in content.splitlines():
         line = l.strip()
         if line.startswith('#') or line.startswith('//') or line == '':
@@ -198,27 +198,27 @@ def csv_urlhaus(feed: Feed, content: str):
                 if not alert.exists([('account_id', domain.account_id), ('description', desc)]):
                     alert.persist()
 
-def rss_projecthoneypot(feed: Feed, content: str, file_path: str):
+def rss_projecthoneypot(feed: Feed, content :str, file_path :str):
     log.info(f'feed {feed.type}')
     log.info(f'file_path {file_path}')
 
-def rss_hphosts(feed: Feed, content: str, file_path: str):
+def rss_hphosts(feed: Feed, content :str, file_path :str):
     log.info(f'feed {feed.type}')
     log.info(f'file_path {file_path}')
 
-def rss1_callbackdomains(feed: Feed, content: str, file_path: str):
+def rss1_callbackdomains(feed: Feed, content :str, file_path :str):
     log.info(f'feed {feed.type}')
     log.info(f'file_path {file_path}')
 
-def rss2_malc0de(feed: Feed, content: str, file_path: str):
+def rss2_malc0de(feed: Feed, content :str, file_path :str):
     log.info(f'feed {feed.type}')
     log.info(f'file_path {file_path}')
 
-def json_gz(feed: Feed, content: str, file_path: str):
+def json_gz(feed: Feed, content :str, file_path :str):
     log.info(f'feed {feed.type}')
     log.info(f'file_path {file_path}')
 
-def update_service_state(service: Service, state: str, event_desc: str):
+def update_service_state(service: Service, state :str, event_desc :str):
     data = {
         'nodes': sum(1 for s in Services().find_by([('category', service.category)], limit=1000) if s.updated_at > datetime.utcnow() - timedelta(minutes=5)),
         'queued_jobs': Feeds().num_queued(category='threat_intel'),
@@ -233,7 +233,7 @@ def update_service_state(service: Service, state: str, event_desc: str):
     service.persist()
     send_event('update_service_state', data)
 
-def main(opts: dict, service: Service):
+def main(opts :dict, service: Service):
     log.info(f'checking queue for service {opts.service}')
     check_feeds = Feeds().get_queued('threat_intel', limit=10)
     if not check_feeds:

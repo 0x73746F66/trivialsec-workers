@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+report=$1
+log_file=$2
+target=$3
+is_active=$4
+severity=$5
+additional_args=''
+
+if [[ -z "${report}" ]]; then echo report path argument not set; exit 1; fi
+if [[ -z "${log_file}" ]]; then echo log_file path argument not set; exit 1; fi
+if [[ -z "${target}" ]]; then echo target path argument not set; exit 1; fi
+if [[ -z "${severity}" ]]; then
+    severity=LOW
+fi
+if [[ "${is_active}" == "-active" ]]; then
+    additional_args="--sneaky"
+fi
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/srv/app/lib
+cd /tmp
+
+start_time="$(date -u +%s)"
+testssl $additional_args \
+    --quiet \
+    --mode parallel \
+    --std \
+    --protocols \
+    --header \
+    --phone-out \
+    --ids-friendly \
+    --nodns min \
+    --warnings off \
+    --hints \
+    --wide \
+    --grease \
+    --nsa \
+    --heartbleed \
+    --ccs-injection \
+    --ticketbleed \
+    --robot \
+    --renegotiation \
+    --crime \
+    --breach \
+    --poodle \
+    --tls-fallback \
+    --sweet32 \
+    --beast \
+    --lucky13 \
+    --winshock \
+    --freak \
+    --logjam \
+    --drown \
+    --rc4 \
+    --show-each \
+    --server-defaults \
+    --server-preference \
+    --client-simulation \
+    --color 0 \
+    --severity ${severity} \
+    --csvfile ${report} \
+    ${target} 2>&1 | tee -a ${log_file} /tmp/application.log
+
+end_time="$(date -u +%s)"
+elapsed="$(($end_time-$start_time))"
+echo "Total of $elapsed seconds elapsed for process"
+exit 0

@@ -1,16 +1,19 @@
 from os import path, getcwd
 from xml.etree import ElementTree # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
+import logging
 import requests
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.models.dns_record import DnsRecord
-from trivialsec.models.finding import Finding, FindingDetail
+from trivialsec.models.finding_detail import FindingDetail
+from trivialsec.models.finding import Finding
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
 from trivialsec.helpers.transport import Metadata
 from trivialsec.helpers.config import config
-from trivialsec.helpers.log_manager import logger
 from worker import WorkerInterface
 
+
+logger = logging.getLogger(__name__)
 
 class Worker(WorkerInterface):
     providers = [
@@ -217,24 +220,23 @@ class Worker(WorkerInterface):
     ]
     _raw = None
 
-    def __init__(self, job, config: dict):
-        super().__init__(job, config)
+    def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
-        target = self.job.queue_data.target
         filename = path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.config.get("worker_id")}.txt',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.txt',
         ))
 
         return filename
 
     def get_log_filename(self) -> str:
         return path.realpath(path.join(
-            self.config['job_path'],
+            self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.config.get("worker_id")}.log',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.log',
         ))
 
     def get_archive_files(self) -> dict:
@@ -262,8 +264,7 @@ class Worker(WorkerInterface):
                 args.append((self.job.queue_data.target, dns_resolver))
             return args
 
-        dns_resolver = self.config.get('external_dsn_provider')
-        return [(self.job.queue_data.target, dns_resolver)]
+        return [(self.job.queue_data.target)] if config.external_dsn_provider is None else [(self.job.queue_data.target, config.external_dsn_provider)]
 
     def post_job_exe(self) -> bool:
         report_path = self.get_result_filename()
@@ -272,7 +273,7 @@ class Worker(WorkerInterface):
 
         return True
 
-    def build_report_summary(self, output: str, log_output: str) -> str:
+    def build_report_summary(self, output :str, log_output :str) -> str:
         summary = 'Scan completed without any new results'
         summary_parts = []
         if len(self.report["dns_records"]) > 0:
@@ -285,7 +286,7 @@ class Worker(WorkerInterface):
             summary = f"Found {' '.join(summary_parts)}"
         return summary
 
-    def build_report(self, cmd_output: str, log_output: str) -> bool:
+    def build_report(self, cmd_output :str, log_output :str) -> bool:
         for dns_record_raw in cmd_output.splitlines():
             fqdn, ttl, dns_class, resource, *answer = dns_record_raw.split()
             answer = " ".join(answer)
@@ -477,7 +478,7 @@ class Worker(WorkerInterface):
             self.report['findings'].append(finding)
 
     @staticmethod
-    def _matches_in_list(search_within: str, substring_list: list) -> bool:
+    def _matches_in_list(search_within :str, substring_list :list) -> bool:
         matched = False
         for substring in substring_list:
             if substring in search_within:
@@ -486,7 +487,7 @@ class Worker(WorkerInterface):
         return matched
 
     @staticmethod
-    def check_missing_bucket(domain_name: str, host_segment: str, provider: str, dns_record: DnsRecord):
+    def check_missing_bucket(domain_name :str, host_segment :str, provider :str, dns_record: DnsRecord):
         evidence = None
         proxies = None
         if config.http_proxy or config.https_proxy:
