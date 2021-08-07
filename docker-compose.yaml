@@ -56,7 +56,7 @@ services:
     <<: *defaults
     container_name: drill
     image: "registry.gitlab.com/trivialsec/workers/drill:${IMAGE_TAG:-latest}"
-    entrypoint: "bash -c 'tail -f /dev/null'"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
     environment:
       - CONFIG_FILE=${CONFIG_FILE}
       - LOG_LEVEL=${LOG_LEVEL}

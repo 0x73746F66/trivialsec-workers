@@ -132,11 +132,13 @@ def main(job: JobRun) -> bool:
         for args in worker.get_exe_args():
             update_state(job, ServiceType.STATE_PROCESSING, f'processing {job.queue_data.service_type_category}')
             job_args = [job_exe_path]
-            if report_path:
+            if report_path is not None:
                 job_args.append(report_path)
-            if log_path:
+            if log_path is not None:
                 job_args.append(log_path)
             job_args.extend(list(args))
+            logger.info(f'job_args {repr(job_args)}')
+            logger.info(f'args {repr(args)}')
             logger.debug(' '.join(job_args))
             if not process(job, job_args):
                 msg = f'Failed processing job {" ".join(job_args)}'

@@ -66,7 +66,18 @@ build-testssl: dep-openssl dep-testssl ## Builds testssl image using docker cli 
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/testssl/Dockerfile .
 
-build: build-metadata build-testssl ## Builds all images
+build-drill: ## Builds drill image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/drill:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/drill:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/drill/Dockerfile .
+
+build: build-metadata build-testssl build-drill ## Builds all images
 
 push-metadata-tagged: ## Push tagged metadata image
 	docker push -q $(REPO_ORG)/metadata:${CI_BUILD_REF}
@@ -74,7 +85,10 @@ push-metadata-tagged: ## Push tagged metadata image
 push-testssl-tagged: ## Push tagged testssl image
 	docker push -q $(REPO_ORG)/testssl:${CI_BUILD_REF}
 
-push-tagged: push-metadata-tagged push-testssl-tagged ## Push tagged images
+push-drill-tagged: ## Push tagged drill image
+	docker push -q $(REPO_ORG)/drill:${CI_BUILD_REF}
+
+push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged ## Push tagged images
 
 push-metadata-ci: ## Push latest metadata image using docker cli directly for CI
 	docker tag $(REPO_ORG)/metadata:${CI_BUILD_REF} $(REPO_ORG)/metadata:latest
@@ -84,7 +98,11 @@ push-testssl-ci: ## Push latest testssl image using docker cli directly for CI
 	docker tag $(REPO_ORG)/testssl:${CI_BUILD_REF} $(REPO_ORG)/testssl:latest
 	docker push -q $(REPO_ORG)/testssl:latest
 
-push-ci: push-metadata-ci push-testssl-ci ## Push latest images
+push-drill-ci: ## Push latest drill image using docker cli directly for CI
+	docker tag $(REPO_ORG)/drill:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
+	docker push -q $(REPO_ORG)/drill:latest
+
+push-ci: push-metadata-ci push-testssl-ci push-drill-ci ## Push latest images
 
 pull-base: ## pulls latest base image
 	docker pull -q registry.gitlab.com/trivialsec/containers-common/python:latest
@@ -94,6 +112,7 @@ build-ci: pull pull-base build ## Builds from latest base image
 pull: ## pulls latest image
 	docker pull -q $(REPO_ORG)/metadata:latest || true
 	docker pull -q $(REPO_ORG)/testssl:latest || true
+	docker pull -q $(REPO_ORG)/drill:latest || true
 
 rebuild: down build-ci ## Brings down the stack and builds it anew
 
@@ -102,7 +121,7 @@ docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
 	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
-	docker-compose up -d metadata testssl
+	docker-compose up -d metadata testssl drill
 
 down: ## Stop the app
 	@docker-compose down --remove-orphans

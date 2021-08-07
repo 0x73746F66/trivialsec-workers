@@ -224,11 +224,10 @@ class Worker(WorkerInterface):
         super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
-        target = self.job.queue_data.target
         filename = path.realpath(path.join(
             self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{target}-{self.paths.get("worker_id")}.txt',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.txt',
         ))
 
         return filename
@@ -237,7 +236,7 @@ class Worker(WorkerInterface):
         return path.realpath(path.join(
             self.paths.get('job_path'),
             self.job.queue_data.service_type_name,
-            f'{self.job.queue_data.scan_type}-{self.job.queue_data.target}-{self.paths.get("worker_id")}.log',
+            f'{self.job.queue_data.scan_type}-{self.paths.get("worker_id")}.log',
         ))
 
     def get_archive_files(self) -> dict:
@@ -265,8 +264,7 @@ class Worker(WorkerInterface):
                 args.append((self.job.queue_data.target, dns_resolver))
             return args
 
-        dns_resolver = self.paths.get('external_dsn_provider')
-        return [(self.job.queue_data.target, dns_resolver)]
+        return [(self.job.queue_data.target)] if config.external_dsn_provider is None else [(self.job.queue_data.target, config.external_dsn_provider)]
 
     def post_job_exe(self) -> bool:
         report_path = self.get_result_filename()

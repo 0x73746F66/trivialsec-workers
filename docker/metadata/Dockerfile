@@ -30,7 +30,8 @@ COPY --chown=trivialsec:trivialsec docker/circusd-logger.yaml circusd-logger.yam
 COPY --chown=trivialsec:trivialsec docker/config-${BUILD_ENV}.yaml config.yaml
 COPY --chown=trivialsec:trivialsec docker/metadata/circus-${BUILD_ENV}.ini circus.ini
 COPY --chown=trivialsec:trivialsec requirements.txt .
-RUN python3 -m pip install -q -U --no-cache-dir -r requirements.txt
+RUN echo "Installing from requirements.txt" \
+    && python3 -m pip install -q -U --no-cache-dir -r requirements.txt
 COPY --chown=trivialsec:trivialsec src/worker worker
 COPY --chown=trivialsec:trivialsec src/metadata metadata
 COPY --chown=trivialsec:trivialsec src/main.py main.py
