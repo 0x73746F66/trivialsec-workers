@@ -21,8 +21,7 @@ prep: ## Cleanup tmp files
 	find . -type d -name '__pycache__' -delete 2>/dev/null || true
 	find . -type f -name '*.DS_Store' -delete 2>/dev/null || true
 	@rm -f **/*.zip **/*.tar **/*.tgz **/*.gz
-	@rm build/*
-	@rm -rf build/* python-libs
+	@rm -rf python-libs
 
 python-libs: prep ## download and install the trivialsec python libs locally (for IDE completions)
 	yes | pip uninstall -q trivialsec-common
@@ -77,7 +76,18 @@ build-drill: ## Builds drill image using docker cli directly for CI
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/drill/Dockerfile .
 
-build: build-metadata build-testssl build-drill ## Builds all images
+build-amass: dep-amass ## Builds amass image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/amass:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/amass:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/amass/Dockerfile .
+
+build: build-metadata build-testssl build-drill build-amass ## Builds all images
 
 push-metadata-tagged: ## Push tagged metadata image
 	docker push -q $(REPO_ORG)/metadata:${CI_BUILD_REF}
@@ -88,7 +98,10 @@ push-testssl-tagged: ## Push tagged testssl image
 push-drill-tagged: ## Push tagged drill image
 	docker push -q $(REPO_ORG)/drill:${CI_BUILD_REF}
 
-push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged ## Push tagged images
+push-amass-tagged: ## Push tagged amass image
+	docker push -q $(REPO_ORG)/amass:${CI_BUILD_REF}
+
+push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged push-amass-tagged ## Push tagged images
 
 push-metadata-ci: ## Push latest metadata image using docker cli directly for CI
 	docker tag $(REPO_ORG)/metadata:${CI_BUILD_REF} $(REPO_ORG)/metadata:latest
@@ -102,7 +115,11 @@ push-drill-ci: ## Push latest drill image using docker cli directly for CI
 	docker tag $(REPO_ORG)/drill:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
 	docker push -q $(REPO_ORG)/drill:latest
 
-push-ci: push-metadata-ci push-testssl-ci push-drill-ci ## Push latest images
+push-amass-ci: ## Push latest amass image using docker cli directly for CI
+	docker tag $(REPO_ORG)/amass:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
+	docker push -q $(REPO_ORG)/amass:latest
+
+push-ci: push-metadata-ci push-testssl-ci push-drill-ci push-amass-ci ## Push latest images
 
 pull-base: ## pulls latest base image
 	docker pull -q registry.gitlab.com/trivialsec/containers-common/python:latest
@@ -113,6 +130,7 @@ pull: ## pulls latest image
 	docker pull -q $(REPO_ORG)/metadata:latest || true
 	docker pull -q $(REPO_ORG)/testssl:latest || true
 	docker pull -q $(REPO_ORG)/drill:latest || true
+	docker pull -q $(REPO_ORG)/amass:latest || true
 
 rebuild: down build-ci ## Brings down the stack and builds it anew
 
@@ -121,7 +139,7 @@ docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
 	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
-	docker-compose up -d metadata testssl drill
+	docker-compose up -d metadata testssl drill amass
 
 down: ## Stop the app
 	@docker-compose down --remove-orphans
@@ -138,8 +156,13 @@ dep-openssl:
 	rm -f bin/openssl*
 
 dep-amass:
-	[ -f build/amass_linux_amd64.zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64.zip
-	unzip -qo build/amass_linux_amd64.zip -d build/
+	[ -f build/amass_linux_amd64-$(AMASS_VERSION).zip ] || wget -q https://github.com/OWASP/Amass/releases/download/v$(AMASS_VERSION)/amass_linux_amd64.zip -O build/amass_linux_amd64-$(AMASS_VERSION).zip
+	unzip -qo build/amass_linux_amd64-$(AMASS_VERSION).zip -d build/
+	mkdir -p build/amass_linux_amd64/examples/wordlists
+	[ -f build/amass_linux_amd64/examples/wordlists/all.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/all.txt -O build/amass_linux_amd64/examples/wordlists/all.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/deepmagic.com_top500prefixes.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/deepmagic.com_top500prefixes.txt -O build/amass_linux_amd64/examples/wordlists/deepmagic.com_top500prefixes.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/bitquark_subdomains_top100K.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/bitquark_subdomains_top100K.txt -O build/amass_linux_amd64/examples/wordlists/bitquark_subdomains_top100K.txt
+	[ -f build/amass_linux_amd64/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt ] || wget -q https://raw.githubusercontent.com/OWASP/Amass/v$(AMASS_VERSION)/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt -O build/amass_linux_amd64/examples/wordlists/sorted_knock_dnsrecon_fierce_recon-ng.txt
 	tar --exclude '*.DS_Store' --exclude 'doc' --exclude 'LICENSE' --exclude 'README.md' -cf build/amass.tar -C build amass_linux_amd64
 	gzip -f9 build/amass.tar
 	ls -l --block-size=M build/amass.tar.gz

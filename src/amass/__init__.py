@@ -7,6 +7,7 @@ from os import path, getcwd
 from trivialsec.models.domain import Domain
 from trivialsec.models.known_ip import KnownIp
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
+from trivialsec.helpers.config import config
 from worker import WorkerInterface
 
 
@@ -53,16 +54,16 @@ class Worker(WorkerInterface):
         elif self.job.queue_data.is_active:
             amass_config.append('mode = active')
         amass_config.extend([
-            f'output_directory = {self.paths.get('amass').get("output_directory")}',
-            f'maximum_dns_queries = {self.paths.get('amass').get("maximum_dns_queries", 20000)}',
+            f'output_directory = {config.amass.get("output_directory")}',
+            f'maximum_dns_queries = {config.amass.get("maximum_dns_queries", 20000)}',
             '[scope]',
             '[scope.domains]',
             f'domain = {self.job.domain.name}',
             '[resolvers]',
-            f'public_dns_resolvers = {"true" if self.paths.get('amass').get("public_dns_resolvers") else "false"}',
-            f'monitor_resolver_rate = {"true" if self.paths.get('amass').get("monitor_resolver_rate") else "false"}',
+            f'public_dns_resolvers = {"true" if config.amass.get("public_dns_resolvers") else "false"}',
+            f'monitor_resolver_rate = {"true" if config.amass.get("monitor_resolver_rate") else "false"}',
         ])
-        dns_resolvers = self.paths.get('nameservers')
+        dns_resolvers = config.nameservers
         if self.job.account.config.nameservers and len(self.job.account.config.nameservers.split(',')) > 0:
             dns_resolvers = self.job.account.config.nameservers.splitlines()
         for nameserver in dns_resolvers:
@@ -73,23 +74,23 @@ class Worker(WorkerInterface):
             for blacklisted in self.job.account.config.blacklisted_domains.splitlines():
                 amass_config.append(f'subdomain = {blacklisted}')
 
-        if self.job.queue_data.is_active and self.paths.get('amass').get("bruteforce", {}).get("enabled"):
+        if self.job.queue_data.is_active and config.amass.get("bruteforce", {}).get("enabled"):
             amass_config.extend([
                 '[bruteforce]',
                 'enabled = true',
             ])
-            if self.paths.get('amass').get("bruteforce", {}).get("wordlist_file"):
-                amass_config.append(f'wordlist_file = {self.paths.get('amass').get("bruteforce", {}).get("wordlist_file")}')
+            if config.amass.get("bruteforce", {}).get("wordlist_file"):
+                amass_config.append(f'wordlist_file = {config.amass.get("bruteforce", {}).get("wordlist_file")}')
 
-        if self.job.queue_data.is_active and self.paths.get('amass').get("alterations", {}).get("enabled"):
+        if self.job.queue_data.is_active and config.amass.get("alterations", {}).get("enabled"):
             amass_config.extend([
                 '[alterations]',
                 'enabled = true',
-                f'add_numbers = {"true" if self.paths.get('amass').get("alterations", {}).get("add_numbers") else "false"}',
+                f'add_numbers = {"true" if config.amass.get("alterations", {}).get("add_numbers") else "false"}',
             ])
         amass_config.extend([
             '[data_sources]',
-            f'minimum_ttl = {self.paths.get('amass').get("sources_minimum_ttl", 1440)}'
+            f'minimum_ttl = {config.amass.get("sources_minimum_ttl", 1440)}'
         ])
         open_data_sources = [
             'anubis',
@@ -118,7 +119,7 @@ class Worker(WorkerInterface):
             'yahoo',
         ]
         disabled = []
-        sources = self.paths.get('amass', {}).get('sources', {})
+        sources = config.amass.get('sources', {})
         for source, conf in sources.items():
             if conf.get('disabled'):
                 disabled.append(conf.get('name'))
@@ -131,7 +132,6 @@ class Worker(WorkerInterface):
             amass_config.append('[data_sources.disabled]')
             for data_source in disabled:
                 amass_config.append(f'data_source = {data_source}')
-
 
         if self.job.account.config.alienvault:
             amass_config.extend([
