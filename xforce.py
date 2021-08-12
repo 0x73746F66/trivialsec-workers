@@ -1,12 +1,13 @@
 import json
 import logging
-import requests
 import pathlib
 from random import randint
 from time import sleep
 from datetime import datetime, timedelta
+import requests
 from retry.api import retry
 from requests.exceptions import ConnectTimeout, ReadTimeout
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -19,14 +20,15 @@ class Config:
     https_proxy = None
 
 config = Config()
-proxies = None
+PROXIES = None
 if config.http_proxy or config.https_proxy:
-    proxies = {
+    PROXIES = {
         'http': f'http://{config.http_proxy}',
         'https': f'https://{config.https_proxy}'
     }
-base_url = 'https://exchange.xforce.ibmcloud.com'
-user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+BASE_URL = 'https://exchange.xforce.ibmcloud.com'
+USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+DATAFILE_DIR = 'datafiles/xforce/vulnerabilities'
 v2_0 = {
     'E': {
         'High': 'E:H',
@@ -48,15 +50,16 @@ v2_0 = {
 }
 
 @retry((ConnectTimeout, ReadTimeout), tries=10, delay=30, backoff=5)
-def query_xforce(ref_id :int):
-    api_url = f'https://exchange.xforce.ibmcloud.com/api/vulnerabilities/{ref_id}'
+def query_single(ref_id :int):
+    api_url = f'{BASE_URL}/api/vulnerabilities/{ref_id}'
+    logger.info(api_url)
     resp = requests.get(
         api_url,
-        proxies=proxies,
+        proxies=PROXIES,
         headers={
             'x-ui': "XFE",
-            'User-Agent': user_agent,
-            'origin': base_url
+            'User-Agent': USER_AGENT,
+            'origin': BASE_URL
         },
         timeout=10
     )
@@ -118,47 +121,25 @@ def xforce_cvss_vector(obj :dict):
 
     return vector
 
-def main():
-    next_id = 1
-    while next_id < 206792:
-        original_data = {}
-        xforce_file = pathlib.Path(f"xforce/vulnerabilities/{next_id}.json")
-        if xforce_file.is_file():
-            original_data = json.loads(xforce_file.read_text())
-            original_data['cvss_vector'] = xforce_cvss_vector(original_data)
-            xforce_file.write_text(json.dumps(original_data, default=str, sort_keys=True))
-            next_id += 1
-            continue
-
-        try:
-            raw = query_xforce(next_id)
-            if raw is None:
-                next_id += 1
-                continue
-            response = json.loads(raw)
-            response['cvss_vector'] = xforce_cvss_vector(response)
-            xforce_file.write_text(json.dumps(response, default=str, sort_keys=True))
-        except json.decoder.JSONDecodeError as ex:
-            logger.exception(ex)
-            logger.info(raw)
-        next_id += 1
-
 @retry((ConnectTimeout, ReadTimeout), tries=10, delay=30, backoff=5)
-def bulk_xforce(start :datetime, end :datetime):
+def query_bulk(start :datetime, end :datetime):
     response = None
-    api_url = f'https://exchange.xforce.ibmcloud.com/api/vulnerabilities/fulltext?q=vulnerability&startDate={start.isoformat()}Z&endDate={end.isoformat()}Z'
+    api_url = f'{BASE_URL}/api/vulnerabilities/fulltext?q=vulnerability&startDate={start.isoformat()}Z&endDate={end.isoformat()}Z'
+    logger.info(api_url)
     resp = requests.get(
         api_url,
-        proxies=proxies,
+        proxies=PROXIES,
         headers={
             'x-ui': "XFE",
-            'User-Agent': user_agent,
-            'origin': base_url
+            'User-Agent': USER_AGENT,
+            'origin': BASE_URL
         },
         timeout=10
     )
     if resp.status_code != 200:
         logger.info(f'{resp.status_code} {api_url}')
+        return response
+
     raw = resp.text
     if raw is None or not raw:
         logger.info(f'empty response {api_url}')
@@ -172,16 +153,16 @@ def bulk_xforce(start :datetime, end :datetime):
     return response
 
 @retry((ConnectTimeout, ReadTimeout), tries=10, delay=30, backoff=5)
-def latest_xforce(limit :int = 200):
+def query_latest(limit :int = 200):
     response = []
-    api_url = f'https://exchange.xforce.ibmcloud.com/api/vulnerabilities/?limit={limit}'
+    api_url = f'{BASE_URL}/api/vulnerabilities/?limit={limit}'
     resp = requests.get(
         api_url,
-        proxies=proxies,
+        proxies=PROXIES,
         headers={
             'x-ui': "XFE",
-            'User-Agent': user_agent,
-            'origin': base_url
+            'User-Agent': USER_AGENT,
+            'origin': BASE_URL
         },
         timeout=10
     )
@@ -199,10 +180,10 @@ def latest_xforce(limit :int = 200):
 
     return response
 
-def latest(limit :int):
-    for item in latest_xforce(limit):
+def do_latest(limit :int):
+    for item in query_latest(limit):
         original_data = {}
-        xforce_file = pathlib.Path(f"xforce/vulnerabilities/{item['xfdbid']}.json")
+        xforce_file = pathlib.Path(f"{DATAFILE_DIR}/{item['xfdbid']}.json")
         if xforce_file.is_file():
             original_data = json.loads(xforce_file.read_text())
             original_data |= item
@@ -213,32 +194,34 @@ def latest(limit :int):
         item['cvss_vector'] = xforce_cvss_vector(item)
         xforce_file.write_text(json.dumps(item, default=str, sort_keys=True))
 
-def bulk(start :datetime, end :datetime) -> bool:
-    bulk = bulk_xforce(start, end)
-    total_rows = int(bulk.get('total_rows', 0))
+def do_bulk(start :datetime, end :datetime) -> bool:
+    resp = query_bulk(start, end)
+    total_rows = int(resp.get('total_rows', 0))
     logger.info(f'total_rows {total_rows}')
     if total_rows == 0:
         logger.info(f'no data between {start} and {end}')
         return False
     if total_rows > 200:
         midday = datetime(start.year, start.month, start.day, 12)
-        bulk1 = bulk_xforce(start, midday)
+        bulk1 = query_bulk(start, midday)
         rows = bulk1.get('rows', [])
-        bulk2 = bulk_xforce(midday, end)
+        bulk2 = query_bulk(midday, end)
         rows += bulk2.get('rows', [])
     if total_rows <= 200:
-        rows = bulk.get('rows', [])
+        rows = resp.get('rows', [])
     for item in rows:
-        datafile = f"xforce/vulnerabilities/{item['xfdbid']}.json"
-        logger.info(datafile)
+        datafile = f"{DATAFILE_DIR}/{item['xfdbid']}.json"
         original_data = {}
         xforce_file = pathlib.Path(datafile)
         if xforce_file.is_file():
+            logger.debug(datafile)
             original_data = json.loads(xforce_file.read_text())
             original_data |= item
             original_data['cvss_vector'] = xforce_cvss_vector(original_data)
             xforce_file.write_text(json.dumps(original_data, default=str, sort_keys=True))
             continue
+
+        logger.info(datafile)
         item['cvss_vector'] = xforce_cvss_vector(item)
         xforce_file.write_text(json.dumps(item, default=str, sort_keys=True))
     return True
@@ -247,8 +230,8 @@ def read_file(file_path :str):
     bulk_file = pathlib.Path(file_path)
     if bulk_file.is_file():
         for item in json.loads(bulk_file.read_text()):
-            datafile = f"xforce/vulnerabilities/{item['xfdbid']}.json"
-            logger.info(datafile)
+            datafile = f"{DATAFILE_DIR}/{item['xfdbid']}.json"
+            logger.debug(datafile)
             xforce_file = pathlib.Path(datafile)
             if xforce_file.is_file():
                 original_data = json.loads(xforce_file.read_text())
@@ -262,16 +245,44 @@ def read_file(file_path :str):
             xforce_json = json.dumps(item, default=str, sort_keys=True)
             xforce_file.write_text(xforce_json)
 
-if __name__ == "__main__":
-    # read_file("xforce-response.json")
+def query_all_individually():
+    next_id = 1
+    while next_id < 206792:
+        original_data = {}
+        xforce_file = pathlib.Path(f"{DATAFILE_DIR}/{next_id}.json")
+        if xforce_file.is_file():
+            original_data = json.loads(xforce_file.read_text())
+            original_data['cvss_vector'] = xforce_cvss_vector(original_data)
+            xforce_file.write_text(json.dumps(original_data, default=str, sort_keys=True))
+            next_id += 1
+            continue
+
+        try:
+            raw = query_single(next_id)
+            if raw is None:
+                next_id += 1
+                continue
+            response = json.loads(raw)
+            response['cvss_vector'] = xforce_cvss_vector(response)
+            xforce_file.write_text(json.dumps(response, default=str, sort_keys=True))
+        except json.decoder.JSONDecodeError as ex:
+            logger.exception(ex)
+            logger.info(raw)
+        next_id += 1
+
+def main():
     not_before = datetime(1996, 12, 31)
-    now = datetime.utcnow()
-    end = datetime(now.year, now.month, now.day)
-    # end = datetime(2021, 6, 18)
+    # now = datetime.utcnow()
+    # end = datetime(now.year, now.month, now.day)
+    end = datetime(2011, 6, 18)
     start = end - timedelta(days=1)
     while start > not_before:
         logger.info(f'between {start} and {end}')
-        bulk(start, end)
+        do_bulk(start, end)
         end = start
         start = end - timedelta(days=1)
         sleep(randint(3,6))
+
+if __name__ == "__main__":
+    # read_file("xforce-response.json")
+    main()

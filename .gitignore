@@ -89,3 +89,4 @@ cert_dot_sh/*.csv.part
 *.tgz
 *.gz
 *.json
+datafiles/
