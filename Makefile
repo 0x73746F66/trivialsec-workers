@@ -3,7 +3,7 @@ SHELL := /bin/bash
 export $(shell sed 's/=.*//' .env)
 REPO_ORG = registry.gitlab.com/trivialsec/workers
 TESTSSL_URL = https://testssl.sh
-BUCKET = tfplans-trivialsec
+BUCKET = stateful-trivialsec
 .ONESHELL:
 .PHONY: help
 
@@ -87,7 +87,18 @@ build-amass: dep-amass ## Builds amass image using docker cli directly for CI
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/amass/Dockerfile .
 
-build: build-metadata build-testssl build-drill build-amass ## Builds all images
+build-nmap: dep-nmap ## Builds nmap image using docker cli directly for CI
+	@docker build --compress $(BUILD_ARGS) \
+		-t $(REPO_ORG)/nmap:$(CI_BUILD_REF) \
+		--cache-from $(REPO_ORG)/nmap:latest \
+        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg BUILD_ENV=$(BUILD_ENV) \
+        --build-arg GITLAB_USER=$(DOCKER_USER) \
+        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
+		-f docker/nmap/Dockerfile .
+
+build: build-metadata build-testssl build-drill build-amass build-nmap ## Builds all images
 
 push-metadata-tagged: ## Push tagged metadata image
 	docker push -q $(REPO_ORG)/metadata:${CI_BUILD_REF}
@@ -101,7 +112,10 @@ push-drill-tagged: ## Push tagged drill image
 push-amass-tagged: ## Push tagged amass image
 	docker push -q $(REPO_ORG)/amass:${CI_BUILD_REF}
 
-push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged push-amass-tagged ## Push tagged images
+push-nmap-tagged: ## Push tagged nmap image
+	docker push -q $(REPO_ORG)/nmap:${CI_BUILD_REF}
+
+push-tagged: push-metadata-tagged push-testssl-tagged push-drill-tagged push-amass-tagged push-nmap-tagged ## Push tagged images
 
 push-metadata-ci: ## Push latest metadata image using docker cli directly for CI
 	docker tag $(REPO_ORG)/metadata:${CI_BUILD_REF} $(REPO_ORG)/metadata:latest
@@ -119,7 +133,11 @@ push-amass-ci: ## Push latest amass image using docker cli directly for CI
 	docker tag $(REPO_ORG)/amass:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
 	docker push -q $(REPO_ORG)/amass:latest
 
-push-ci: push-metadata-ci push-testssl-ci push-drill-ci push-amass-ci ## Push latest images
+push-nmap-ci: ## Push latest nmap image using docker cli directly for CI
+	docker tag $(REPO_ORG)/nmap:${CI_BUILD_REF} $(REPO_ORG)/tedrillstssl:latest
+	docker push -q $(REPO_ORG)/nmap:latest
+
+push-ci: push-metadata-ci push-testssl-ci push-drill-ci push-amass-ci push-nmap-ci ## Push latest images
 
 pull-base: ## pulls latest base image
 	docker pull -q registry.gitlab.com/trivialsec/containers-common/python:latest
@@ -131,6 +149,7 @@ pull: ## pulls latest image
 	docker pull -q $(REPO_ORG)/testssl:latest || true
 	docker pull -q $(REPO_ORG)/drill:latest || true
 	docker pull -q $(REPO_ORG)/amass:latest || true
+	docker pull -q $(REPO_ORG)/nmap:latest || true
 
 rebuild: down build-ci ## Brings down the stack and builds it anew
 
@@ -139,7 +158,7 @@ docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
 	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
-	docker-compose up -d metadata testssl drill amass
+	docker-compose up -d metadata testssl drill amass nmap
 
 down: ## Stop the app
 	@docker-compose down --remove-orphans
@@ -166,6 +185,21 @@ dep-amass:
 	tar --exclude '*.DS_Store' --exclude 'doc' --exclude 'LICENSE' --exclude 'README.md' -cf build/amass.tar -C build amass_linux_amd64
 	gzip -f9 build/amass.tar
 	ls -l --block-size=M build/amass.tar.gz
+
+dep-nmap:
+	mkdir -p build/scipag_vulscan
+	[ -f build/scipag_vulscan/vulscan.nse ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/vulscan.nse -O build/scipag_vulscan/vulscan.nse
+	[ -f build/scipag_vulscan/cve.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/cve.csv -O build/scipag_vulscan/cve.csv
+	[ -f build/scipag_vulscan/exploitdb.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/exploitdb.csv -O build/scipag_vulscan/exploitdb.csv
+	[ -f build/scipag_vulscan/openvas.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/openvas.csv -O build/scipag_vulscan/openvas.csv
+	[ -f build/scipag_vulscan/osvdb.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/osvdb.csv -O build/scipag_vulscan/osvdb.csv
+	[ -f build/scipag_vulscan/scipvuldb.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/scipvuldb.csv -O build/scipag_vulscan/scipvuldb.csv
+	[ -f build/scipag_vulscan/securityfocus.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/securityfocus.csv -O build/scipag_vulscan/securityfocus.csv
+	[ -f build/scipag_vulscan/securitytracker.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/securitytracker.csv -O build/scipag_vulscan/securitytracker.csv
+	[ -f build/scipag_vulscan/xforce.csv ] || wget -q https://raw.githubusercontent.com/scipag/vulscan/master/xforce.csv -O build/scipag_vulscan/xforce.csv
+	tar --exclude '*.DS_Store' -cf build/scipag_vulscan.tar -C build scipag_vulscan/
+	gzip -f9 build/scipag_vulscan.tar
+	ls -l --block-size=M build/scipag_vulscan.tar.gz
 
 dep-testssl:
 	[ -f build/testssl ] || wget -q https://raw.githubusercontent.com/drwetter/testssl.sh/3.1dev/testssl.sh -O build/testssl

@@ -240,7 +240,7 @@ class WorkerInterface:
                         description=f'Apex domain {tld.name} saved via {self.job.queue_data.service_type_category}',
                         url=f'/domain/{tld.domain_id}'
                     ).persist()
-                    queue_job(self.job, 'metadata', tld.name, scan_next=['drill', 'testssl'])
+                    queue_job(self.job, 'metadata', tld.name, scan_next=['drill', 'testssl', 'nmap'])
                     tld_dict = {}
                     for col in domain.cols():
                         tld_dict[col] = getattr(tld, col)
@@ -274,7 +274,7 @@ class WorkerInterface:
                     description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
                     url=f'/domain/{domain.domain_id}'
                 ).persist()
-                queue_job(self.job, 'metadata', domain.name, scan_next=['drill', 'testssl'])
+                queue_job(self.job, 'metadata', domain.name, scan_next=['drill', 'testssl', 'nmap'])
                 domain_dict = {}
                 for col in domain.cols():
                     domain_dict[col] = getattr(domain, col)

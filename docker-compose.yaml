@@ -96,6 +96,33 @@ services:
         aliases:
           - amass
 
+  nmap:
+    <<: *defaults
+    container_name: nmap
+    image: "registry.gitlab.com/trivialsec/workers/nmap:${IMAGE_TAG:-latest}"
+    # entrypoint: "bash -c 'tail -f /dev/null'"
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - AWS_ACCESS_KEY_ID=${TF_VAR_aws_access_key_id}
+      - AWS_SECRET_ACCESS_KEY=${TF_VAR_aws_secret_access_key}
+    volumes:
+      - ./docker/nmap/bin:/srv/app/lib/bin
+      - ./src/nmap:/srv/app/nmap
+      - ./src/worker:/srv/app/worker
+      - ./src/main.py:/srv/app/main.py
+      - ./src/s3_upload.py:/srv/app/s3_upload.py
+      - ./docker/config-${BUILD_ENV}.yaml:/srv/app/config.yaml
+    networks:
+      default:
+        aliases:
+          - nmap
+    cap_add:
+      - DAC_OVERRIDE
+      - NET_RAW
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+
 networks:
   default:
     external:

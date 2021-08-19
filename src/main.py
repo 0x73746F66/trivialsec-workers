@@ -46,16 +46,17 @@ def process(job: JobRun, job_args :list) -> bool:
     retcode = None
     error = 'Unknown'
     logger.info(' '.join(job_args))
+    proc = None
     try:
         proc = Popen(job_args)
         retcode = proc.poll()
         while retcode is None:
             time.sleep(config.queue_wait_timeout or 3)
             retcode = proc.poll()
-    except Exception as err:
-        logger.critical(err)
+    except Exception as ex:
+        logger.critical(ex)
     finally:
-        if proc:
+        if proc is not None:
             msg = f"{proc.stdout or ''}".strip()
             logger.info(msg)
             error = f"{proc.stderr or ''}".strip()
@@ -137,8 +138,6 @@ def main(job: JobRun) -> bool:
             if log_path is not None:
                 job_args.append(log_path)
             job_args.extend(list(args))
-            logger.info(f'job_args {repr(job_args)}')
-            logger.info(f'args {repr(args)}')
             logger.debug(' '.join(job_args))
             if not process(job, job_args):
                 msg = f'Failed processing job {" ".join(job_args)}'
@@ -161,8 +160,7 @@ def main(job: JobRun) -> bool:
 
             logger.info(f'build report {job.queue_data.target} {job.queue_data.service_type_category}')
             if not worker.build_report(output_file, log_output):
-                err = 'report could not be generated'
-                handle_error(err, job)
+                handle_error('report could not be generated', job)
                 return False
             logger.info(f'validate report {job.queue_data.target} {job.queue_data.service_type_category}')
             if not worker.validate_report():
@@ -180,8 +178,7 @@ def main(job: JobRun) -> bool:
                     )
             logger.info(f'saving report {job.queue_data.target} {job.queue_data.service_type_category} {worker.build_report_summary(output_file, log_output)}')
             if not worker.save_report():
-                err = 'report was not saved to the database'
-                handle_error(err, job)
+                handle_error('report was not saved to the database', job)
                 return False
 
             logger.info(f'analyse report {job.queue_data.target} {job.queue_data.service_type_category}')
@@ -259,9 +256,9 @@ if __name__ == "__main__":
     try:
         main(current_job)
         logger.info(f'Finished service {current_job.node_id} worker {current_job.worker_id}')
-    except Exception as ex:
-        logger.error(ex)
-        update_state(current_job, ServiceType.STATE_ERROR, ex)
+    except Exception as err:
+        logger.error(err)
+        update_state(current_job, ServiceType.STATE_ERROR, err)
 
     close_socket()
     sys.exit(0)

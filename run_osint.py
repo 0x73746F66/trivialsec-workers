@@ -7,49 +7,56 @@ from ipwhois.utils import get_countries
 from netaddr import IPAddress
 
 
-API_KEY='<maps apikey>'
+API_KEY = '<maps apikey>'
 file_in = "./internet-connected.csv"
 file_out = "./enriched-ip-list.csv"
 
-def get_coords(ip):
-  url = "https://freegeoip.net/json/%s" % ip
-  r = requests.get(url)
 
-  return r.json()
+def get_coords(ip):
+    url = "https://freegeoip.net/json/%s" % ip
+    r = requests.get(url)
+
+    return r.json()
+
 
 def get_geo(lat, lon):
-  url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key={}&radius=1&location={},{}".format(API_KEY, lat, lon)
-  r = requests.get(url)
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key={}&radius=1&location={},{}".format(
+        API_KEY, lat, lon)
+    r = requests.get(url)
 
-  return r.json()
+    return r.json()
+
 
 def get_place(id):
-  url = "https://maps.googleapis.com/maps/api/place/details/json?key={}&placeid={}".format(API_KEY, id)
-  r = requests.get(url)
+    url = "https://maps.googleapis.com/maps/api/place/details/json?key={}&placeid={}".format(
+        API_KEY, id)
+    r = requests.get(url)
 
-  return r.json()
+    return r.json()
+
 
 def whois(ip):
-  countries = get_countries()
-  obj = IPWhois(ip)
-  result = obj.lookup_rdap(depth=1, asn_methods=['dns', 'whois', 'http'])
-  country = countries[result['asn_country_code']]
-  network_type = result['network']['type']
-  name = result['network']['name']
-  description = result['asn_description']
-  registry = result['asn_registry']
-  entities = ', '.join(result['entities'])
+    countries = get_countries()
+    obj = IPWhois(ip)
+    result = obj.lookup_rdap(depth=1, asn_methods=['dns', 'whois', 'http'])
+    country = countries[result['asn_country_code']]
+    network_type = result['network']['type']
+    name = result['network']['name']
+    description = result['asn_description']
+    registry = result['asn_registry']
+    entities = ', '.join(result['entities'])
 
-  return country, network_type, name, description, registry, entities
+    return country, network_type, name, description, registry, entities
+
 
 def seconds_to_gmt_offset_str(secs):
-  if not isinstance(secs, int):
-    return None
-  prefix = '+'
-  if secs < 0:
-    prefix = '-'
+    if not isinstance(secs, int):
+        return None
+    prefix = '+'
+    if secs < 0:
+        prefix = '-'
 
-  return "%s%02d:%02d" % (prefix, abs(secs) / 60, abs(secs) % 60)
+    return "%s%02d:%02d" % (prefix, abs(secs) / 60, abs(secs) % 60)
 
 
 fileReader = csv.reader(open(file_in), delimiter=",")
@@ -99,7 +106,7 @@ for ip in fileReader:
         'utc': offset,
         'gmt': gmt,
         'checked': dt.isoformat()
-      }
+    }
 
     df = pd.DataFrame(data_dict, index=[0])
     c = {

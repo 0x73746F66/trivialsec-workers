@@ -3,29 +3,30 @@
 report=$1
 log_file=$2
 target=$3
-mincvss=$4
-dsn_providers=$5
-
+dsn_providers=$4
+mincvss=${5:-"0"}
+proxy_address=${6}
 if [[ -z "${report}" ]]; then echo report path argument not set; exit 1; fi
 if [[ -z "${log_file}" ]]; then echo log_file path argument not set; exit 1; fi
 if [[ -z "${target}" ]]; then echo target path argument not set; exit 1; fi
 if [[ -z "${dsn_providers}" ]]; then echo dsn_providers argument not set; exit 1; fi
-if [[ -z "${mincvss}" ]]; then
-    mincvss=0
-fi
+[[ -z "${mincvss}" ]] && mincvss=0
+proxy_arg=""
+[[ -z "${proxy_address}" ]] || proxy_arg="--proxies $proxy_address"
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/srv/app/lib
 cd /tmp
 start_time="$(date -u +%s)"
 
-nmap \
-    -A \
+nmap ${proxy_arg} \
     --privileged \
+    -A \
     -sV \
-    --script vulners,smb-os-discovery,banner,broadcast-igmp-discovery,broadcast-listener,ssl-ccs-injection,http-comments-displayer,http-malware-host,http-referer-checker,http-traceroute,http-xssed,dns-blacklist,firewalk,traceroute-geolocation,whois-ip \
+    --script vulscan,http-xssed,firewalk,whois-ip,ssl-ccs-injection,smb-os-discovery \
     --script-args mincvss=$mincvss \
-    -v \
-    -oX ${report} \
+    --data-string trivialsec \
+    -oX ${report} --no-stylesheet \
+    --reason \
     --dns-servers ${dsn_providers} \
     ${target} >${log_file} 2>&1
 

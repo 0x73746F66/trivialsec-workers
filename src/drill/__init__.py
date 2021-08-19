@@ -492,8 +492,8 @@ class Worker(WorkerInterface):
         proxies = None
         if config.http_proxy or config.https_proxy:
             proxies = {
-                'http': config.http_proxy,
-                'https': config.https_proxy
+                'http': f'http://{config.http_proxy}',
+                'https': f'https://{config.https_proxy}'
             }
         try:
             xml_content = requests.get(f'http://{domain_name}',

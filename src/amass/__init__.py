@@ -21,7 +21,11 @@ class Worker(WorkerInterface):
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.paths.get('job_path'), self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.json'))
+        filename = path.realpath(path.join(
+            self.paths.get('job_path'),
+            self.job.queue_data.service_type_name,
+            f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.json'
+        ))
 
         return filename
 
@@ -29,7 +33,11 @@ class Worker(WorkerInterface):
         scan_type = 'active'
         if self.job.queue_data.is_passive:
             scan_type = 'passive'
-        filename = path.realpath(path.join(self.paths.get('job_path'), self.job.queue_data.service_type_name, f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.log'))
+        filename = path.realpath(path.join(
+            self.paths.get('job_path'),
+            self.job.queue_data.service_type_name,
+            f'{scan_type}-{self.job.domain.name}-{self.paths.get("worker_id")}.log'
+        ))
 
         return filename
 

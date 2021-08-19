@@ -38,15 +38,15 @@ RUN mkdir -p /openssl /tmp/testssl /testssl/etc \
     && tar -xzvf /tmp/trivialsec/openssl.tar.gz -C /openssl \
     && mv -f /openssl/bin/openssl /usr/bin/openssl \
     && echo "Installing testssl.sh" \
-    && apt-get update \
+    && apt-get update -q \
     && apt-get install -qy --no-install-recommends bsdmainutils procps \
     && tar -xzvf /tmp/trivialsec/testssl.tar.gz -C /tmp/testssl \
     && mv -f /tmp/testssl/* ${TESTSSL_INSTALL_DIR}/ \
+    && chown -R trivialsec:trivialsec ${TESTSSL_INSTALL_DIR}/etc /openssl \
     && echo "Clean up..." \
     && apt-get autoremove -y \
     && apt-get clean \
-    && rm -rf /tmp/* /var/lib/apt/lists/* \
-    && chown -R trivialsec:trivialsec ${TESTSSL_INSTALL_DIR}/etc /openssl
+    && rm -rf /tmp/* /var/lib/apt/lists/*
 
 USER trivialsec
 COPY --chown=trivialsec:trivialsec docker/circusd-logger.yaml circusd-logger.yaml
