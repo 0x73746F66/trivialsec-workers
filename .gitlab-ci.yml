@@ -1,5 +1,5 @@
 variables:
-  COMMON_VERSION: 0.7.0
+  COMMON_VERSION: 0.8.0
   AMASS_VERSION: 3.13.4
   OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
   AWS_ACCESS_KEY_ID: $TF_VAR_aws_access_key_id

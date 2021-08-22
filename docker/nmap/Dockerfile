@@ -14,7 +14,6 @@ ENV APP_NAME ${APP_NAME}
 ENV AWS_REGION ap-southeast-2
 ENV AWS_ACCESS_KEY_ID ${AWS_ACCESS_KEY_ID}
 ENV AWS_SECRET_ACCESS_KEY ${AWS_SECRET_ACCESS_KEY}
-ENV CONFIG_FILE ${CONFIG_FILE}
 ENV LOG_LEVEL ${LOG_LEVEL}
 
 USER root
@@ -44,7 +43,6 @@ RUN mkdir -p /nse \
     && rm -rf /tmp/* /var/lib/apt/lists/*
 
 COPY docker/circusd-logger.yaml circusd-logger.yaml
-COPY docker/config-${BUILD_ENV}.yaml config.yaml
 COPY docker/nmap/circus-${BUILD_ENV}.ini circus.ini
 COPY docker/nmap/bin lib/bin
 COPY requirements.txt .

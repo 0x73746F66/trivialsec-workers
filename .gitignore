@@ -90,3 +90,4 @@ cert_dot_sh/*.csv.part
 *.gz
 *.json
 datafiles/
+python-libs/
