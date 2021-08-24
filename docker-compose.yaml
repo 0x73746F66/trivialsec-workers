@@ -1,11 +1,23 @@
 version: '3.6'
 x-defaults: &defaults
   env_file: .env
-  restart: unless-stopped
   logging:
     options:
       max-size: "10m"
       max-file: "3"
+  deploy:
+    restart_policy:
+      condition: on-failure
+      delay: 3s
+      max_attempts: 10
+      window: 1s
+    resources:
+      limits:
+        cpus: '1.00'
+        memory: 1GB
+      reservations:
+        cpus: '0.50'
+        memory: 500M
 
 services:
   metadata:
