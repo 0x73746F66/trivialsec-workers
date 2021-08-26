@@ -170,7 +170,7 @@ class Worker(WorkerInterface):
         return normalised
 
     def build_report(self, cmd_output :str, log_output :str) -> bool:
-        with open(f'{self._prefix_path}-nmap.json', 'w') as buf:
+        with open(f'{self._prefix_path}-nmap.json', 'w', encoding='utf8') as buf:
             buf.write(json.dumps(xmltodict.parse(cmd_output), default=str))
 
         nmap_results = xmltodict.parse(cmd_output)

@@ -318,7 +318,7 @@ class Worker(WorkerInterface):
             except OSError as exc: # EEXIST race condition
                 if exc.errno != errno.EEXIST:
                     raise
-        with open(config_filepath, 'w') as buff:
+        with open(config_filepath, 'w', encoding='utf8') as buff:
             buff.write("\n".join(amass_config))
 
         return  True

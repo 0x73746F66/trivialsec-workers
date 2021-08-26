@@ -14,20 +14,16 @@ def get_options() -> dict:
     parser.add_argument('-s', '--service', help='service instance', dest='service', required=True)
     parser.add_argument('-w', '--worker-id', help='unique service instance id', dest='worker_id', required=True)
     parser.add_argument('-a', '--account-id', help='Customer specific workers', dest='account_id', default=None)
-    parser.add_argument('-c', '--conf', help='absolution path to the custom config file', dest='custom_config', default=None)
     parser.add_argument('-p', '--pid-file', help='absolution path to the application pid file', dest='pid_file', default='/srv/app/worker.pid')
 
     args = parser.parse_args()
     try:
-        with open(args.pid_file, 'w') as pid_fd:
+        with open(args.pid_file, 'w', encoding='utf8') as pid_fd:
             pid_fd.write(str(os.getpid()))
     except Exception as ex:
         print(ex)
         sys.exit(1)
 
-    if args.custom_config is not None:
-        config.config_file = args.custom_config
-        config.configure()
     opts = {**args.__dict__}
     if opts.get('worker_id') is None:
         opts['worker_id'] = config.node_id

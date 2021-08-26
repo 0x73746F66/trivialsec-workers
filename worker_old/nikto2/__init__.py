@@ -119,7 +119,7 @@ def active_recon_dast(job: Job)->(bool, str):
 
 def gather_report(job: Job, report :dict) -> tuple:
     report_file_path, _ = get_result_filename(job)
-    with open(report_file_path, 'r') as r:
+    with open(report_file_path, 'r', encoding='utf8') as r:
         log.info('reading report lines')
         for line in r.readlines():
             log.info(line)

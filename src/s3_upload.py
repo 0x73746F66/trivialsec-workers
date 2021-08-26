@@ -2,6 +2,7 @@ import argparse
 import json
 import sys
 import boto3
+import pathlib
 from trivialsec.helpers.config import config
 
 
@@ -9,15 +10,16 @@ def main(options :dict):
     response = ''
     aws_session = boto3.Session(region_name=options['aws'].get('region_name'))
     s3_client = aws_session.client('s3')
-    with open(options.get('source_path'), 'r') as buff:
+    source_path = pathlib.Path(options.get('source_path'))
+    if source_path.is_file():
         response = s3_client.put_object(
             Bucket=options['aws'].get('public_bucket'),
             ACL='bucket-owner-full-control',
-            Body=buff.read(),
+            Body=source_path.read_text(),
             Key=options.get('dest_path').strip(),
             StorageClass='STANDARD_IA',
         )
-    print(json.dumps(response, default=str))
+        print(json.dumps(response, default=str))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

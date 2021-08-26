@@ -1,9 +1,10 @@
-from os import path
+from os import path, makedirs
 from datetime import datetime
+import errno
 import json
+import logging
 import requests
 import tldextract
-import logging
 from bs4 import BeautifulSoup as bs
 from trivialsec.models.domain import Domain
 from trivialsec.models.domain_stat import DomainStat
@@ -46,7 +47,7 @@ class Worker(WorkerInterface):
         }
 
     def get_job_exe_path(self) -> str:
-        return 'echo'
+        return ''
 
     def pre_job_exe(self) -> bool:
         self.job.domain.fetch_metadata()
@@ -57,6 +58,11 @@ class Worker(WorkerInterface):
         return [('metadata',)]
 
     def post_job_exe(self) -> bool:
+        try:
+            makedirs(path.dirname(self._prefix_path))
+        except OSError as exc: # EEXIST race condition
+            if exc.errno != errno.EEXIST:
+                return False
         return True
 
     def build_report_summary(self, output :str, log_output :str) -> str:
@@ -90,7 +96,7 @@ class Worker(WorkerInterface):
             return
 
         cert = getattr(self.job.domain, DomainStat.HTTP_CERTIFICATE)
-        with open(f'{self._prefix_path}-x509.json', 'w') as buf:
+        with open(f'{self._prefix_path}-x509.json', 'w', encoding='utf8') as buf:
             buf.write(json.dumps(cert, default=str))
         domains = set()
         for subject, subject_alt_name in cert['subjectAltName'][0]:
@@ -110,7 +116,7 @@ class Worker(WorkerInterface):
     def check_headers(self):
         server_headers = ['x-powered-by', 'server']
         proxy_headers = ['via']
-        with open(f'{self._prefix_path}-http-headers.json', 'w') as buf:
+        with open(f'{self._prefix_path}-http-headers.json', 'w', encoding='utf8') as buf:
             buf.write(json.dumps(self.job.domain._http_metadata.headers, default=str)) # pylint: disable=protected-access
         for header_name, header_value in self.job.domain._http_metadata.headers.items(): # pylint: disable=protected-access
             server_name, server_version = extract_server_version(header_value)
@@ -182,7 +188,7 @@ class Worker(WorkerInterface):
             if res.status_code == 200:
                 res_json = res.json()
                 logger.debug(res_json)
-                with open(f'{self._prefix_path}-whoisxmlapi-brand-alert.json', 'w') as buf:
+                with open(f'{self._prefix_path}-whoisxmlapi-brand-alert.json', 'w', encoding='utf8') as buf:
                     buf.write(json.dumps(res_json, default=str))
                 for res_dict in res_json.get('domainsList', []):
                     # {"domainName":"sportsbetbonus.us","date":"2021-02-11","action":"added"}
@@ -212,7 +218,7 @@ class Worker(WorkerInterface):
             if res.status_code == 200:
                 res_json = res.json()
                 logger.debug(res_json)
-                with open(f'{self._prefix_path}-whoisxmlapi-domain-reputation.json', 'w') as buf:
+                with open(f'{self._prefix_path}-whoisxmlapi-domain-reputation.json', 'w', encoding='utf8') as buf:
                     buf.write(json.dumps(res_json, default=str))
                 res_json['_source'] = 'whoisxmlapi-domain-reputation'
                 self.report['domain_stats'].append(DomainStat(
@@ -237,7 +243,7 @@ class Worker(WorkerInterface):
             if res.status_code == 200:
                 res_json = res.json()
                 logger.debug(res_json)
-                with open(f'{self._prefix_path}-domainsdb.json', 'w') as buf:
+                with open(f'{self._prefix_path}-domainsdb.json', 'w', encoding='utf8') as buf:
                     buf.write(json.dumps(res_json, default=str))
                 for domain_json in res_json.get('domains', []):
                     if self.job.domain.name != domain_json.get('domain'):
@@ -268,7 +274,7 @@ class Worker(WorkerInterface):
             logger.debug(verify_url)
             temp_path = download_file(verify_url, f'{self.job.domain.name}-hibp-verification.txt')
             if temp_path is not None:
-                with open(temp_path, 'r') as handle:
+                with open(temp_path, 'r', encoding='utf8') as handle:
                     hibp_token = handle.read().strip()
         except Exception as err:
             logger.warning(err)
@@ -323,7 +329,7 @@ class Worker(WorkerInterface):
                 if res.status_code == 200:
                     hibp_json = res.json()
                     logger.debug(hibp_json)
-                    with open(f'{self._prefix_path}-hibp-domain-search.json', 'w') as buf:
+                    with open(f'{self._prefix_path}-hibp-domain-search.json', 'w', encoding='utf8') as buf:
                         buf.write(json.dumps(hibp_json, default=str))
                     breach_search_results = hibp_json.get('BreachSearchResults') or []
                     paste_search_results = hibp_json.get('PasteSearchResults') or []
@@ -355,7 +361,7 @@ class Worker(WorkerInterface):
             if res.status_code == 200:
                 hibp_breaches = res.json()
                 logger.debug(hibp_breaches)
-                with open(f'{self._prefix_path}-hibp-breaches.json', 'w') as buf:
+                with open(f'{self._prefix_path}-hibp-breaches.json', 'w', encoding='utf8') as buf:
                     buf.write(json.dumps(hibp_breaches, default=str))
                 for hibp_breach in hibp_breaches:
                     self.report['domain_stats'].append(DomainStat(

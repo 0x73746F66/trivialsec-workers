@@ -79,7 +79,7 @@ def complete_job(job: JobRuns, report_summary :str, queue_data_path :str, queue_
     job.completed_at = datetime.utcnow().isoformat()
     job.queue_data.completed_at = job.completed_at
     job.queue_data.report_summary = report_summary[:255]
-    with open(queue_data_path, 'w') as buff:
+    with open(queue_data_path, 'w', encoding='utf8') as buff:
         buff.write(str(job.queue_data))
     update_state(job, ServiceType.STATE_COMPLETED, job.queue_data.report_summary)
     s3_upload(
@@ -105,7 +105,7 @@ def main(job: JobRun) -> bool:
         queue_data_path = path.join(options['job_path'], f'queue_data_{job_uuid}.json')
         queue_data_object_path = path.join(s3_path_prefix, job_uuid, 'queue_data.json')
         mkpath(queue_data_path)
-        with open(queue_data_path, 'w') as buff:
+        with open(queue_data_path, 'w', encoding='utf8') as buff:
             buff.write(str(job.queue_data))
         s3_upload(
             queue_data_path,
@@ -152,10 +152,10 @@ def main(job: JobRun) -> bool:
             output_file = None
             log_output = None
             if report_path:
-                with open(report_path, 'r') as buff:
+                with open(report_path, 'r', encoding='utf8') as buff:
                     output_file = buff.read()
             if log_path:
-                with open(log_path, 'r') as buff:
+                with open(log_path, 'r', encoding='utf8') as buff:
                     log_output = buff.read()
 
             logger.info(f'build report {job.queue_data.target} {job.queue_data.service_type_category}')
