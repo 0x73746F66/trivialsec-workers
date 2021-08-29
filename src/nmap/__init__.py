@@ -16,12 +16,15 @@ logger = logging.getLogger(__name__)
 class Worker(WorkerInterface):
     _prefix_path :str
     def __init__(self, job, paths :dict):
+        super().__init__(job, paths)
+        self.external_dns_provider = None
+        if len(config.nameservers) > 0:
+            self.external_dns_provider = config.nameservers[0]
         self._prefix_path = path.realpath(path.join(
             paths.get('job_path'),
             job.queue_data.service_type_name,
             f'{job.queue_data.scan_type}-{paths.get("worker_id")}',
         ))
-        super().__init__(job, paths)
 
     def get_result_filename(self) -> str:
         return path.realpath(path.join(
@@ -58,7 +61,7 @@ class Worker(WorkerInterface):
 
     def get_exe_args(self) -> list:
         min_cvss = config.nmap.get('min_cvss', 0)
-        nameservers = config.external_dsn_provider
+        nameservers = self.external_dns_provider
         if self.job.account.config.nameservers and len(self.job.account.config.nameservers.splitlines()) > 0:
             nameservers = ','.join(self.job.account.config.nameservers.splitlines())
 

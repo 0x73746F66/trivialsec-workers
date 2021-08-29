@@ -222,6 +222,9 @@ class Worker(WorkerInterface):
 
     def __init__(self, job, paths :dict):
         super().__init__(job, paths)
+        self.external_dns_provider = None
+        if len(config.nameservers) > 0:
+            self.external_dns_provider = config.nameservers[0]
 
     def get_result_filename(self) -> str:
         filename = path.realpath(path.join(
@@ -264,7 +267,7 @@ class Worker(WorkerInterface):
                 args.append((self.job.queue_data.target, dns_resolver))
             return args
 
-        return [(self.job.queue_data.target)] if config.external_dsn_provider is None else [(self.job.queue_data.target, config.external_dsn_provider)]
+        return [(self.job.queue_data.target)] if self.external_dns_provider is None else [(self.job.queue_data.target, self.external_dns_provider)]
 
     def post_job_exe(self) -> bool:
         report_path = self.get_result_filename()

@@ -18,7 +18,7 @@ ENV LOG_LEVEL ${LOG_LEVEL}
 
 RUN touch /tmp/application.log \
     && echo "Cloning python-libs from Gitlab" \
-    && git clone --depth 1 --branch ${COMMON_VERSION} --single-branch https://${GITLAB_USER}:${GITLAB_PASSWORD}@gitlab.com/trivialsec/python-common.git /tmp/trivialsec/python-libs \
+    && git clone -q -c advice.detachedHead=false --depth 1 --branch ${COMMON_VERSION} --single-branch https://${GITLAB_USER}:${GITLAB_PASSWORD}@gitlab.com/trivialsec/python-common.git /tmp/trivialsec/python-libs \
     && cd /tmp/trivialsec/python-libs \
     && echo "Installing python-libs" \
     && make install \

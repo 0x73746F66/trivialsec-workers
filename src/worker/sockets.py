@@ -29,7 +29,7 @@ def close_socket():
 def send_event(event :str, data :dict):
     if not sio.connected:
         try:
-            host = f"{config.frontend.get('socket_scheme')}{config.frontend.get('socket_domain')}"
+            host = config.get_app()['socket_url']
             logger.info(f'socketio.Client CONNECT {host}')
             sio.connect(host, transports=['websocket'])
 
