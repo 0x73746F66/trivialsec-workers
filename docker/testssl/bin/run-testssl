@@ -28,6 +28,7 @@ testssl $additional_args \
     --protocols \
     --header \
     --phone-out \
+    --sneaky \
     --ids-friendly \
     --nodns min \
     --warnings off \
