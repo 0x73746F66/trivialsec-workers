@@ -70,7 +70,7 @@ def ipv4_dataplane(feed: Feed, content :str):
         utc = utc.strip()
         category = category.strip()
 
-        for ip_address in helpers.cidr_address_list(ipaddr):
+        for ip_address in cidr_address_list(ipaddr):
             if helpers.is_valid_ipv4_address(ip_address):
                 customer_ips = get_customer_ips(ip_address)
                 for known_ip in customer_ips:
@@ -95,7 +95,7 @@ def ipv4_haleys(feed: Feed, content :str):
         ipaddr = ipaddr.strip()
         occurred_date = datetime.fromtimestamp(timestamp)
 
-        for ip_address in helpers.cidr_address_list(ipaddr):
+        for ip_address in cidr_address_list(ipaddr):
             if helpers.is_valid_ipv4_address(ip_address):
                 customer_ips = get_customer_ips(ip_address)
                 for known_ip in customer_ips:
@@ -109,7 +109,7 @@ def ipv4_list(feed: Feed, content :str):
         ipaddr = l.strip()
         if ipaddr.startswith('#') or ipaddr.startswith('//') or ipaddr == '':
             continue
-        for ip_address in helpers.cidr_address_list(ipaddr):
+        for ip_address in cidr_address_list(ipaddr):
             if helpers.is_valid_ipv4_address(ip_address):
                 customer_ips = get_customer_ips(ip_address)
                 for known_ip in customer_ips:
@@ -126,7 +126,7 @@ def ipv4_bruteforceblocker(feed: Feed, content :str):
 
         ipaddr, *_ = line.split('#')
         ipaddr = ipaddr.strip()
-        for ip_address in helpers.cidr_address_list(ipaddr):
+        for ip_address in cidr_address_list(ipaddr):
             if helpers.is_valid_ipv4_address(ip_address):
                 customer_ips = get_customer_ips(ip_address)
                 for known_ip in customer_ips:
@@ -181,7 +181,7 @@ def csv_urlhaus(feed: Feed, content :str):
         ipaddr = ipaddr.replace('"', '')
         country = country.replace('"', '')
 
-        for ip_address in helpers.cidr_address_list(ipaddr):
+        for ip_address in cidr_address_list(ipaddr):
             if helpers.is_valid_ipv4_address(ip_address) or helpers.is_valid_ipv6_address(ip_address):
                 customer_ips = get_customer_ips(ip_address)
                 for known_ip in customer_ips:

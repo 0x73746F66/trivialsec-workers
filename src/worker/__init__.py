@@ -221,7 +221,7 @@ class WorkerInterface:
 
             ext = tldextract.extract(f'http://{domain.name}')
             if domain.parent_domain_id is None and ext.registered_domain != domain.name:
-                tld = Domain(
+                apex = Domain(
                     name=ext.registered_domain,
                     account_id=self.job.account_id,
                     project_id=self.job.project_id,
@@ -231,22 +231,22 @@ class WorkerInterface:
                     deleted=False,
                     enabled=False
                 )
-                tld_exists = tld.exists(['name', 'project_id'])
-                domain.parent_domain_id = tld.domain_id
-                if not tld_exists:
-                    tld.persist(exists=tld_exists)
+                apex_exists = apex.exists(['name', 'project_id'])
+                domain.parent_domain_id = apex.domain_id
+                if not apex_exists:
+                    apex.persist(exists=apex_exists)
                     Notification(
                         account_id=self.job.account_id,
-                        description=f'Apex domain {tld.name} saved via {self.job.queue_data.service_type_category}',
-                        url=f'/domain/{tld.domain_id}'
+                        description=f'Apex domain {apex.name} saved via {self.job.queue_data.service_type_category}',
+                        url=f'/domain/{apex.domain_id}'
                     ).persist()
-                    queue_job(self.job, 'metadata', tld.name, scan_next=['drill', 'testssl', 'nmap'])
-                    tld_dict = {}
+                    queue_job(self.job, 'metadata', apex.name, scan_next=['drill', 'testssl', 'nmap'])
+                    apex_dict = {}
                     for col in domain.cols():
-                        tld_dict[col] = getattr(tld, col)
+                        apex_dict[col] = getattr(apex, col)
                     send_event('domain_changes', {
                         'socket_key': self.job.account.socket_key,
-                        'domain': tld_dict,
+                        'domain': apex_dict,
                     })
 
             domain.account_id = self.job.account_id

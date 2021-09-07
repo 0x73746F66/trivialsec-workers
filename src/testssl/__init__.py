@@ -8,7 +8,8 @@ from trivialsec.models.finding_detail import FindingDetail
 from trivialsec.models.finding import Finding
 from trivialsec.models.inventory import InventoryItem
 from trivialsec.models.program import Program
-from trivialsec.helpers import extract_server_version, oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
+from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
+from trivialsec.helpers.transport import extract_server_version
 from worker import WorkerInterface
 
 

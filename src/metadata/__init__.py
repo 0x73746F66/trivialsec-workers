@@ -10,8 +10,7 @@ from trivialsec.models.domain import Domain
 from trivialsec.models.domain_stat import DomainStat
 from trivialsec.models.program import Program
 from trivialsec.models.inventory import InventoryItem
-from trivialsec.helpers import extract_server_version
-from trivialsec.helpers.transport import Metadata, download_file
+from trivialsec.helpers.transport import Metadata, download_file, extract_server_version
 from trivialsec.helpers.config import config
 from worker import WorkerInterface
 
