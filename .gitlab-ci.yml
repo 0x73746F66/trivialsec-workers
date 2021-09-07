@@ -2,11 +2,6 @@ variables:
   COMMON_VERSION: 0.8.0
   AMASS_VERSION: 3.13.4
   OPENSSL_PKG: openssl-1.0.2k-chacha.pm.ipv6.Linux+FreeBSD.201705.tar.gz
-  AWS_ACCESS_KEY_ID: $TF_VAR_aws_access_key_id
-  AWS_SECRET_ACCESS_KEY: $TF_VAR_aws_secret_access_key
-  AWS_REGION: ap-southeast-2
-  TAG_ENV: Prod
-  TAG_PURPOSE: Deploy
 
 before_script:
   - aws --version
