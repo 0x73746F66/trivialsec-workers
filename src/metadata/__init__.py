@@ -1,375 +1,474 @@
-from os import path, makedirs
-from datetime import datetime
-import errno
 import json
 import logging
+from datetime import datetime
+from tldextract import TLDExtract
+from OpenSSL.crypto import X509
 import requests
-import tldextract
 from bs4 import BeautifulSoup as bs
-from trivialsec.models.domain import Domain
-from trivialsec.models.domain_stat import DomainStat
-from trivialsec.models.program import Program
-from trivialsec.models.inventory import InventoryItem
-from trivialsec.helpers.transport import Metadata, download_file, extract_server_version
+from elasticsearch import Elasticsearch
+from trivialsec.models.domain import Domain, DomainMonitor
+from trivialsec.models.job_run import JobRun
+from trivialsec.helpers.transport import Metadata, download_file
 from trivialsec.helpers.config import config
-from worker import WorkerInterface
+from trivialsec.services.domains import upsert_domain
+from pprint import pprint
 
-
+HIBP_VERIFY_TXT = 'have-i-been-pwned-verification'
 logger = logging.getLogger(__name__)
+extractor = TLDExtract(cache_dir='/tmp')
+es = Elasticsearch(
+    config.elasticsearch.get('hosts'),
+    http_auth=(config.elasticsearch.get('user'), config.elasticsearch_password),
+    scheme=config.elasticsearch.get('scheme'),
+    port=config.elasticsearch.get('port'),
+)
+class Indexes(object):
+    domaintools_reputation = "domaintools-reputation"
+    whoisxmlapi_brand_alert = "whoisxmlapi-brand-alert"
+    whoisxmlapi_reputation = "whoisxmlapi-reputation"
+    x509 = "x509"
+    domainsdb = 'domainsdb'
+    hibp_monitor = 'hibp-domain-monitor'
+    hibp_breaches = 'hibp-breaches'
+    safe_browsing = 'safe-browsing'
+    phishtank = 'phishtank'
 
-class Worker(WorkerInterface):
-    _prefix_path :str
-    updated :bool = False
-    def __init__(self, job, paths :dict):
-        self._prefix_path = path.realpath(path.join(
-            paths.get('job_path'),
-            job.queue_data.service_type_name,
-            f'{job.queue_data.scan_type}-{paths.get("worker_id")}',
-        ))
-        super().__init__(job, paths)
+def metadata_service(job :JobRun) -> bool:
+    for index in vars(Indexes):
+        if index.startswith('_'):
+            continue
+        es.indices.create(index=getattr(Indexes, 'index'), ignore=400) # pylint: disable=unexpected-keyword-arg
 
-    def get_result_filename(self) -> str:
-        return ''
+    metadata = Metadata(f'https://{job.queue_data.target}')
+    try:
+        metadata.head()
+    except Exception as ex:
+        logger.error(ex)
 
-    def get_log_filename(self) -> str:
-        return ''
-
-    def get_archive_files(self) -> dict:
-        return {
-            'x509.json': f'{self._prefix_path}-x509.json',
-            'http-headers.json': f'{self._prefix_path}-http-headers.json',
-            'domainsdb.json': f'{self._prefix_path}-domainsdb.json',
-            'whoisxmlapi-brand-alert.json': f'{self._prefix_path}-whoisxmlapi-brand-alert.json',
-            'whoisxmlapi-domain-reputation.json': f'{self._prefix_path}-whoisxmlapi-domain-reputation.json',
-            'hibp-domain-search.json': f'{self._prefix_path}-hibp-domain-search.json',
-            'hibp-breaches.json': f'{self._prefix_path}-hibp-breaches.json'
-        }
-
-    def get_job_exe_path(self) -> str:
-        return ''
-
-    def pre_job_exe(self) -> bool:
-        self.job.domain.fetch_metadata()
-        self.updated = isinstance(self.job.domain._http_metadata.code, int) # pylint: disable=protected-access
-        return self.updated
-
-    def get_exe_args(self) -> list:
-        return [('metadata',)]
-
-    def post_job_exe(self) -> bool:
+    if not str(metadata.code).startswith('2'):
         try:
-            makedirs(path.dirname(self._prefix_path))
-        except OSError as exc: # EEXIST race condition
-            if exc.errno != errno.EEXIST:
-                return False
-        return True
+            metadata.url = f'http://{job.queue_data.target}'
+            metadata.head()
+        except Exception as ex:
+            logger.error(ex)
 
-    def build_report_summary(self, output :str, log_output :str) -> str:
-        return 'Updated metadata' if self.updated else 'No metadata'
+    if not save_domain_metadata(job, metadata):
+        logger.error(f'metadata service failed to update {job.domain.domain_name}')
+        return False
 
-    def build_report(self, cmd_output :str, log_output :str) -> bool:
-        self.report['domain_stats'] = self.job.domain.gather_stats()
-        self.check_subject_alt_name()
-        self.check_headers()
-        self.check_hibp_breaches()
-        # self.check_hibp_domian_monitor()
-        self.check_domainsdb()
-        self.check_whoisxmlapi_brand_alert()
-        is_tld = False
-        if self.job.domain.parent_domain_id is None:
-            is_tld = True
+    phish_domains = []
+    breaches = []
+    results = check_subject_alt_name(job, metadata)
+    if isinstance(results, list):
+        save_domains(job, results)
+
+    hibp_data = check_hibp_domian_monitor(job, metadata)
+    breach_search_results = hibp_data.get('BreachSearchResults') or []
+    for hibp_res in breach_search_results:
+        user = hibp_res.get('Alias')
+        domain = hibp_res.get('DomainName')
+        for hibp_breach in hibp_res.get('Breaches', []) or []:
+            breaches.append({
+                'source': hibp_breach.get('Name'),
+                'domain':  hibp_breach.get('Domain'),
+                'title':  hibp_breach.get('Title'),
+                'created_at': hibp_breach.get('AddedDate'),
+                'breach_reported': hibp_breach.get('BreachDate'),
+                'email': f"{user}@{domain}",
+            })
+    paste_search_results = hibp_data.get('PasteSearchResults') or []
+    for hibp_res in paste_search_results:
+        user = hibp_res.get('Alias')
+        domain = hibp_res.get('DomainName')
+        for hibp_paste in hibp_res.get('Pastes', []) or []:
+            breaches.append({
+                'source': hibp_paste.get('Source'),
+                'title':  hibp_paste.get('Title'),
+                'created_at': hibp_paste.get('Date'),
+                'email': f"{user}@{domain}",
+            })
+
+    domainsdb_results = check_domainsdb(job)
+    for res_dict in domainsdb_results.get('domains', []):
+        if job.queue_data.target != res_dict.get('domain'):
+            phish_domains.append({
+                'domain_name': res_dict.get('domain'),
+                'create_date': res_dict.get('create_date'),
+                'source': 'domainsdb',
+                'country': res_dict.get('country'),
+            })
+            continue
+        job.domain.registered_at = res_dict.get('create_date')
+
+    phish_results = check_whoisxmlapi_brand_alert(job)
+    for res_dict in phish_results:
+        # {"domainName":"sportsbetbonus.us","date":"2021-02-11","action":"added"}
+        phish_domains.append({
+            'domain_name': res_dict.get('domainName'),
+            'create_date': res_dict.get('date'),
+            'source': 'whoisxmlapi_brand_alert',
+        })
+
+    ext = extractor(f'http://{job.queue_data.target}')
+    if ext.registered_domain == job.queue_data.target:
+        whois_reputation = check_whoisxmlapi_reputation(job)
+        if isinstance(whois_reputation, dict):
+            job.domain.reputation_whoisxmlapi = whois_reputation.get('reputationScore')
+        dt_reputation = check_domaintools_reputation(job)
+        if isinstance(dt_reputation, dict):
+            job.domain.reputation_domaintools = dt_reputation.get('response', {}).get('risk_score')
+
+    hibp_breaches = check_hibp_breaches(job)
+    for hibp_breach in hibp_breaches:
+        breaches.append({
+            'source': hibp_breach.get('Name'),
+            'domain':  hibp_breach.get('Domain'),
+            'title':  hibp_breach.get('Title'),
+            'created_at': hibp_breach.get('AddedDate'),
+            'breach_reported': hibp_breach.get('BreachDate'),
+            'description': hibp_breach.get('Description'),
+            'tags': hibp_breach.get('DataClasses', []),
+        })
+    if len(breaches) > 0:
+        job.domain.intel_hibp_exposure = True
+
+    job.domain.phishing_domains = list(set(phish_domains + job.domain.phishing_domains))
+    return True
+
+def save_domain_metadata(job :JobRun, metadata :Metadata) -> bool:
+    domain :Domain = job.domain
+    if metadata.phishtank:
+        es.index(index=Indexes.phishtank, id=job.domain.domain_name, body=json.dumps(metadata.phishtank, default=str)) # pylint: disable=protected-access
+        domain.intel_phishtank = True
+    if metadata.safe_browsing:
+        es.index(index=Indexes.safe_browsing, id=job.domain.domain_name, body=json.dumps(metadata.safe_browsing, default=str)) # pylint: disable=protected-access
+
+    domain.assessed_at = datetime.utcnow().replace(microsecond=0)
+    domain.dns_registered = metadata.dns_registered
+    domain.reputation_google_safe_browsing = metadata.safe_browsing_status
+    # domain.registered_at = 
+    # domain.registrar = 
+    # domain.registrant = 
+    # domain.registrar_history = 
+    domain.negotiated_cipher_suite_iana = metadata.negotiated_cipher
+    domain.sha1_fingerprint = metadata.sha1_fingerprint
+    domain.server_key_size = metadata.server_key_size
+    domain.signature_algorithm = metadata.signature_algorithm
+    domain.pubkey_type = metadata.pubkey_type
+    domain.certificate_is_self_signed = metadata.certificate_is_self_signed
+    domain.negotiated_protocol = metadata.protocol_version
+    domain.certificate_serial_number = metadata.certificate_serial_number
+    domain.certificate_issuer = metadata.certificate_issuer
+    domain.certificate_issuer_country = metadata.certificate_issuer_country
+    domain.certificate_not_before = metadata.certificate_not_before
+    domain.certificate_not_after = metadata.certificate_not_after
+    domain.http_status = metadata.code
+    domain.html_size = metadata.html_size
+    domain.html_title = metadata.html_title
+    domain.server_banner = metadata.server_banner
+    domain.application_banner = metadata.application_banner
+    domain.reverse_proxy_banner = metadata.application_proxy
+    domain.http_headers = metadata.headers
+    domain.cookies = metadata.cookies
+    domain.intel_honey_score = metadata.honey_score
+    domain.intel_threat_score = metadata.threat_score
+    domain.intel_threat_type = metadata.threat_type
+    domain.intel_threat_type = metadata.threat_type
+    metadata.javascript += domain.javascript
+    domain.javascript = list({v['url']:v for v in metadata.javascript}.values())
+    pprint(domain.javascript)
+    exit(0)
+
+def save_domains(job :JobRun, domains :list):
+    for domain in domains:
+        domain_monitor = DomainMonitor()
+        domain_monitor.domain_name = domain.domain_name
+        domain_monitor.enabled = False
+        domain_monitor.project_id = job.project.project_id
+        domain_monitor.account_id = job.account_id
+        domain_monitor_exists = domain_monitor.exists(['domain_name', 'project_id'])
+        if domain_monitor_exists is False and not domain_monitor.persist(exists=domain_monitor_exists):
+            raise ValueError('Internal error: domain_monitor.persist')
+
+        ext = extractor(f'http://{job.queue_data.target}')
+        upsert_domain(domain, member=job.member, project=job.project, external_domain=not domain.domain_name.endswith(ext.registered_domain))
+
+def check_subject_alt_name(job :JobRun, metadata :Metadata):
+    if not isinstance(metadata.server_certificate, X509):
+        logger.warning(f'Missing certificate for {job.queue_data.target}')
+        return
+    results = []
+    cert = json.loads(metadata._json_certificate) # pylint: disable=protected-access
+    serial_number = cert.get("serialNumber", metadata.server_certificate.get_serial_number()) 
+    es.index(index=Indexes.x509, id=serial_number, body=metadata._json_certificate) # pylint: disable=protected-access
+    domains = set()
+    for subject, subject_alt_name in cert['subjectAltName'][0]:
+        if subject != 'DNS':
+            continue
+        if ' ' in subject_alt_name:
+            for name in subject_alt_name.split(' '):
+                domains.add(name)
         else:
-            ext = tldextract.extract(f'http://{self.job.domain.name}')
-            if ext.registered_domain == self.job.domain.name:
-                self.job.domain.parent_domain_id = None
-                self.job.domain.persist()
-                is_tld = True
-        if is_tld:
-            self.check_whoisxmlapi_reputation()
+            domains.add(subject_alt_name)
+    for domain_name in domains:
+        domain = Domain(domain_name=domain_name)
+        domain.source = f'TLS Certificate Serial Number {serial_number}'
+        results.append(domain)
+    return results
 
-        return True
-
-    def check_subject_alt_name(self):
-        if not hasattr(self.job.domain, DomainStat.HTTP_CERTIFICATE):
-            logger.warning(f'Missing {DomainStat.HTTP_CERTIFICATE} for {self.job.domain.name}')
+def check_whoisxmlapi_brand_alert(job :JobRun):
+    try:
+        ext = tldextract.extract(f'http://{job.queue_data.target}')
+        url = 'https://brand-alert.whoisxmlapi.com/api/v2'
+        data = {
+            'search': ext.domain,
+            'responseFormat': 'json',
+            'searchType': 'historic',
+            'punycode': True,
+            'mode': 'preview'
+        }
+        logger.debug(f'{url} {json.dumps(data)}')
+        res = requests.post(url, timeout=3, json=data, headers={
+            'Content-type': 'application/json; charset=UTF-8',
+            'X-Authentication-Token': config.whoisxmlapi_key
+        })
+        if res.status_code == 200:
+            res_json = res.json()
+            logger.debug(res_json)
+            domains_count: int = int(res_json.get('domainsCount', 0))
+            if domains_count == 0:
+                logger.info(f'[{job.queue_data.target}] no phishing domains recorded in whoisxmlapi')
+                return
+        else:
+            logger.warning(f'[{job.queue_data.target}] {url} status_code {res.status_code} {res.reason} {res.text}')
             return
 
-        cert = getattr(self.job.domain, DomainStat.HTTP_CERTIFICATE)
-        with open(f'{self._prefix_path}-x509.json', 'w', encoding='utf8') as buf:
-            buf.write(json.dumps(cert, default=str))
-        domains = set()
-        for subject, subject_alt_name in cert['subjectAltName'][0]:
-            if subject != 'DNS':
-                continue
-            if ' ' in subject_alt_name:
-                for name in subject_alt_name.split(' '):
-                    domains.add(name)
-            else:
-                domains.add(subject_alt_name)
-        for domain_name in domains:
-            domain = Domain(name=domain_name)
-            domain.source = f'TLS Certificate Serial Number {cert["serialNumber"]}'
-            domain.enabled = False
-            self.report['domains'].append(domain)
+        data['mode'] = 'purchase'
+        res = requests.post(url, timeout=3, json=data, headers={
+            'content-type': 'application/json;charset=UTF-8',
+            'X-Authentication-Token': config.whoisxmlapi_key
+        })
+        if res.status_code == 200:
+            res_json = res.json()
+            logger.debug(res_json)
+            es.index(index=Indexes.whoisxmlapi_brand_alert, id=ext.domain, body=json.dumps(res_json, default=str))
+            return res_json.get('domainsList', [])
 
-    def check_headers(self):
-        server_headers = ['x-powered-by', 'server']
-        proxy_headers = ['via']
-        with open(f'{self._prefix_path}-http-headers.json', 'w', encoding='utf8') as buf:
-            buf.write(json.dumps(self.job.domain._http_metadata.headers, default=str)) # pylint: disable=protected-access
-        for header_name, header_value in self.job.domain._http_metadata.headers.items(): # pylint: disable=protected-access
-            server_name, server_version = extract_server_version(header_value)
-            if server_name is None:
-                continue
-            source_description = f'HTTP Header [{header_name}] of {self.job.domain.name}'
-            if header_name in server_headers:
-                program = Program(name=server_name)
-                program.hydrate('name')
-                if program.category is None:
-                    program.category = 'server'
-                if program.program_id is None:
-                    program.persist()
-                self.report['inventory_items'].append(InventoryItem(
-                    program_id=program.program_id,
-                    project_id=self.job.domain.project_id,
-                    domain_id=self.job.domain.domain_id,
-                    version=server_version,
-                    source_description=source_description,
-                ))
-            elif header_name in proxy_headers:
-                program = Program(name=server_name)
-                program.hydrate('name')
-                if program.category is None:
-                    program.category = 'proxy'
-                if program.program_id is None:
-                    program.persist()
-                self.report['inventory_items'].append(InventoryItem(
-                    program_id=program.program_id,
-                    project_id=self.job.domain.project_id,
-                    domain_id=self.job.domain.domain_id,
-                    version=server_version,
-                    source_description=source_description,
-                ))
+    except Exception as err:
+        logger.warning(err)
 
-    def check_whoisxmlapi_brand_alert(self):
-        try:
-            ext = tldextract.extract(f'http://{self.job.domain.name}')
-            url = 'https://brand-alert.whoisxmlapi.com/api/v2'
-            data = {
-                'search': ext.domain,
-                'responseFormat': 'json',
-                'searchType': 'historic',
-                'punycode': True,
-                'mode': 'preview'
-            }
-            logger.debug(f'{url} {json.dumps(data)}')
-            res = requests.post(url, timeout=3, json=data, headers={
-                'Content-type': 'application/json; charset=UTF-8',
-                'X-Authentication-Token': config.whoisxmlapi_key
-            })
+def check_whoisxmlapi_reputation(job :JobRun):
+    """
+    reputationScore: 0 is dangerous, and 100 is safe
+    Tests performed and warnings: https://domain-reputation.whoisxmlapi.com/api/documentation/output-format#test-codes
+    """
+    try:
+        url = 'https://domain-reputation.whoisxmlapi.com/api/v1'
+        data = {
+            'domainName': job.queue_data.target,
+            'outputFormat': 'json',
+            'mode': 'fast',
+            'apiKey': config.whoisxmlapi_key
+        }
+        logger.debug(f'{url} {data}')
+        res = requests.post(url, json=data, headers={'content-type': 'application/json;charset=UTF-8'})
+        if res.status_code == 200:
+            res_json = res.json()
+            logger.debug(res_json)
+            es.index(index=Indexes.whoisxmlapi_reputation, id=job.queue_data.target, body=json.dumps(res_json, default=str))
+            return res_json
+        else:
+            logger.warning(f'[{job.queue_data.target}] {url} status_code {res.status_code} {res.reason} {res.text}')
+            return
+
+    except Exception as err:
+        logger.warning(err)
+
+def check_domaintools_reputation(job :JobRun):
+    """
+    risk_score 0 (least risk) 100 (known risk)
+    reasons 'blocklist', 'dns', 'realtime', 'registrant', 'zerolist'
+    """
+    try:
+        url = f'https://api.domaintools.com/v1/reputation/?api_username={config.domaintools_user}&api_key={config.domaintools_key}&domain={job.queue_data.target}'
+        logger.debug(f'{url}')
+        res = requests.get(url, headers={'User-Agent': config.user_agent})
+        if res.status_code == 200:
+            res_json = res.json()
+            logger.debug(res_json)
+            es.index(index=Indexes.domaintools_reputation, id=job.queue_data.target, body=json.dumps(res_json, default=str))
+            return res_json
+        else:
+            logger.warning(f'[{job.queue_data.target}] {url} status_code {res.status_code} {res.reason} {res.text}')
+            return
+
+    except Exception as err:
+        logger.warning(err)
+
+def check_domainsdb(job :JobRun):
+    try:
+        domain_part = job.domain.apex.replace(job.domain.tld, '')
+        url = f'https://api.domainsdb.info/v1/domains/search?domain={domain_part}&api_key={config.domainsdb_key}'
+        logger.debug(url)
+        res = requests.get(url)
+        if res.status_code == 200:
+            res_json = res.json()
+            logger.debug(res_json)
+            es.index(index=Indexes.domainsdb, id=job.queue_data.target, body=json.dumps(res_json, default=str))
+            return res_json
+        else:
+            logger.warning(f'[{job.queue_data.target}] api.domainsdb.info/v1/domains/search status_code {res.status_code} {res.reason} {res.text}')
+            return
+
+    except Exception as err:
+        logger.warning(err)
+
+def get_domian_monitor_token_dns(job :JobRun):
+    hibp_token = None
+    try:
+        hibp_verify, _ = Metadata.get_txt_value(job.queue_data.target, HIBP_VERIFY_TXT)
+        if hibp_verify is not None:
+            verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
+            verify_txt_record_data = f'Token={hibp_verify}'
+            logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
+            res = requests.post(
+                verify_txt_record_url,
+                data=verify_txt_record_data,
+                headers={
+                    'authority': 'haveibeenpwned.com',
+                    'User-Agent': config.user_agent,
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Origin': 'https://haveibeenpwned.com',
+                    'Referer': 'https://haveibeenpwned.com/DomainSearch',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                timeout=3
+            )
             if res.status_code == 200:
-                res_json = res.json()
-                logger.debug(res_json)
-                domains_count: int = int(res_json.get('domainsCount', 0))
-                if domains_count == 0:
-                    logger.info(f'[{self.job.domain.name}] no phishing domains recorded in whoisxmlapi')
-                    return
+                hibp_json = res.json()
+                logger.debug(hibp_json)
+                hibp_token = hibp_json.get('Token')
             else:
-                logger.warning(f'[{self.job.domain.name}] {url} status_code {res.status_code} {res.reason} {res.text}')
-                return
+                logger.warning(f'[{job.queue_data.target}] haveibeenpwned.com/api/domainverification/verifytxtrecord status_code {res.status_code}')
+    except Exception as err:
+        logger.warning(err)
 
-            data['mode'] = 'purchase'
-            logger.debug(f'{url} {data}')
-            res = requests.post(url, timeout=3, json=data, headers={
-                'content-type': 'application/json;charset=UTF-8',
-                'X-Authentication-Token': config.whoisxmlapi_key
-            })
+    return hibp_token
+
+def get_domian_monitor_token_file(job :JobRun):
+    hibp_token = None
+    hibp_verify = None
+    try:
+        verify_url = f'http://{job.queue_data.target}/{HIBP_VERIFY_TXT}.txt'
+        logger.debug(verify_url)
+        temp_path = download_file(verify_url, f'{job.queue_data.target}-hibp-verification.txt')
+        if temp_path is not None:
+            with open(temp_path, 'r', encoding='utf8') as handle:
+                hibp_verify = handle.read().strip()
+        if hibp_verify is not None:
+            verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifyfileupload'
+            verify_txt_record_data = f'Token={hibp_verify}'
+            logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
+            res = requests.post(
+                verify_txt_record_url,
+                data=verify_txt_record_data,
+                headers={
+                    'authority': 'haveibeenpwned.com',
+                    'User-Agent': config.user_agent,
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Origin': 'https://haveibeenpwned.com',
+                    'Referer': 'https://haveibeenpwned.com/DomainSearch',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                timeout=3
+            )
             if res.status_code == 200:
-                res_json = res.json()
-                logger.debug(res_json)
-                with open(f'{self._prefix_path}-whoisxmlapi-brand-alert.json', 'w', encoding='utf8') as buf:
-                    buf.write(json.dumps(res_json, default=str))
-                for res_dict in res_json.get('domainsList', []):
-                    # {"domainName":"sportsbetbonus.us","date":"2021-02-11","action":"added"}
-                    res_dict['_source'] = 'whoisxmlapi-brand-alert'
-                    self.report['domain_stats'].append(DomainStat(
-                        domain_id=self.job.domain.domain_id,
-                        domain_stat=DomainStat.PHISH_DOMAIN,
-                        domain_value=res_dict.get('domainName'),
-                        domain_data=res_dict,
-                        created_at=datetime.utcnow()
-                    ))
-
-        except Exception as err:
-            logger.warning(err)
-
-    def check_whoisxmlapi_reputation(self):
-        try:
-            url = 'https://domain-reputation.whoisxmlapi.com/api/v1'
-            data = {
-                'domainName': self.job.domain.name,
-                'outputFormat': 'json',
-                'mode': 'fast',
-                'apiKey': config.whoisxmlapi_key
-            }
-            logger.debug(f'{url} {data}')
-            res = requests.post(url, json=data, headers={'content-type': 'application/json;charset=UTF-8'})
-            if res.status_code == 200:
-                res_json = res.json()
-                logger.debug(res_json)
-                with open(f'{self._prefix_path}-whoisxmlapi-domain-reputation.json', 'w', encoding='utf8') as buf:
-                    buf.write(json.dumps(res_json, default=str))
-                res_json['_source'] = 'whoisxmlapi-domain-reputation'
-                self.report['domain_stats'].append(DomainStat(
-                    domain_id=self.job.domain.domain_id,
-                    domain_stat=DomainStat.DOMAIN_REPUTATION,
-                    domain_value=res_json.get('reputationScore'),
-                    domain_data=res_json,
-                    created_at=datetime.utcnow()
-                ))
+                hibp_json = res.json()
+                logger.debug(hibp_json)
+                hibp_token = hibp_json.get('Token')
             else:
-                logger.warning(f'[{self.job.domain.name}] {url} status_code {res.status_code} {res.reason} {res.text}')
-                return
+                logger.warning(f'[{job.queue_data.target}] haveibeenpwned.com/api/domainverification/verifyfileupload status_code {res.status_code}')
+    except Exception as err:
+        logger.warning(err)
 
-        except Exception as err:
-            logger.warning(err)
+    return hibp_token
 
-    def check_domainsdb(self):
-        try:
-            url = f'https://api.domainsdb.info/v1/domains/search?domain={self.job.domain.name}'
-            logger.debug(url)
-            res = requests.get(url)
-            if res.status_code == 200:
-                res_json = res.json()
-                logger.debug(res_json)
-                with open(f'{self._prefix_path}-domainsdb.json', 'w', encoding='utf8') as buf:
-                    buf.write(json.dumps(res_json, default=str))
-                for domain_json in res_json.get('domains', []):
-                    if self.job.domain.name != domain_json.get('domain'):
-                        continue
-                    domain_json['_source'] = 'domainsdb'
-                    self.report['domain_stats'].append(DomainStat(
-                        domain_id=self.job.domain.domain_id,
-                        domain_stat=DomainStat.DOMAIN_REGISTRATION,
-                        domain_value=domain_json.get('create_date'),
-                        domain_data=domain_json,
-                        created_at=datetime.utcnow()
-                    ))
-            else:
-                logger.warning(f'[{self.job.domain.name}] api.domainsdb.info/v1/domains/search status_code {res.status_code} {res.reason} {res.text}')
-                return
-
-        except Exception as err:
-            logger.warning(err)
-
-    def get_domian_monitor_token_dns(self, hibp_verify_txt :str):
-        hibp_token, _ = Metadata.get_txt_value(self.job.domain.name, hibp_verify_txt)
-        return hibp_token
-
-    def get_domian_monitor_token_meta(self, hibp_verify_txt :str):
-        hibp_token = None
-        try:
-            verify_url = f'http://{self.job.domain.name}/{hibp_verify_txt}.txt'
-            logger.debug(verify_url)
-            temp_path = download_file(verify_url, f'{self.job.domain.name}-hibp-verification.txt')
-            if temp_path is not None:
-                with open(temp_path, 'r', encoding='utf8') as handle:
-                    hibp_token = handle.read().strip()
-        except Exception as err:
-            logger.warning(err)
-        return hibp_token
-
-    def get_domian_monitor_token_file(self, hibp_verify_txt :str):
-        hibp_token = None
-        html_content = self.job.domain._http_metadata._content # pylint: disable=protected-access
-        if html_content is not None:
-            soup = bs(html_content, 'html.parser')
-            meta_tag = soup.find(name=hibp_verify_txt)
-            hibp_verify = None
-            if meta_tag:
-                hibp_verify = meta_tag.get("content")
-            if hibp_verify is not None:
-                try:
-                    verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifytxtrecord'
-                    verify_txt_record_data = f'Token={hibp_verify}'
-                    logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
-                    res = requests.post(
-                        verify_txt_record_url,
-                        data=verify_txt_record_data,
-                        headers={'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'},
-                        timeout=3
-                    )
-                    if res.status_code == 200:
-                        hibp_json = res.json()
-                        logger.debug(hibp_json)
-                        hibp_token = hibp_json.get('Token')
-                    else:
-                        logger.warning(f'[{self.job.domain.name}] haveibeenpwned.com/api/domainverification/verifytxtrecord status_code {res.status_code}')
-                except Exception as err:
-                    logger.warning(err)
-
-        return hibp_token
-
-    def check_hibp_domian_monitor(self):
-        hibp_verify_txt = 'have-i-been-pwned-verification'
-        hibp_token = self.get_domian_monitor_token_dns(hibp_verify_txt)
-        if hibp_token is None:
-            hibp_token = self.get_domian_monitor_token_meta(hibp_verify_txt)
-        if hibp_token is None:
-            hibp_token = self.get_domian_monitor_token_file(hibp_verify_txt)
-
-        breach_search_results = []
-        paste_search_results = []
-        if hibp_token is not None:
+def get_domian_monitor_token_meta(job :JobRun, html_content :str):
+    hibp_token = None
+    if html_content is not None:
+        soup = bs(html_content, 'html.parser')
+        meta_tag = soup.find(name=HIBP_VERIFY_TXT)
+        hibp_verify = None
+        if meta_tag:
+            hibp_verify = meta_tag.get("content")
+        if hibp_verify is not None:
             try:
-                verify_url = f'https://haveibeenpwned.com/DomainSearch/{hibp_token}/Json'
-                logger.debug(verify_url)
-                res = requests.get(verify_url, timeout=3)
+                verify_txt_record_url = 'https://haveibeenpwned.com/api/domainverification/verifymetatag'
+                verify_txt_record_data = f'Token={hibp_verify}'
+                logger.debug(f'{verify_txt_record_url} <= {verify_txt_record_data}')
+                res = requests.post(
+                    verify_txt_record_url,
+                    data=verify_txt_record_data,
+                    headers={
+                        'authority': 'haveibeenpwned.com',
+                        'User-Agent': config.user_agent,
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'Origin': 'https://haveibeenpwned.com',
+                        'Referer': 'https://haveibeenpwned.com/DomainSearch',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    timeout=3
+                )
                 if res.status_code == 200:
                     hibp_json = res.json()
                     logger.debug(hibp_json)
-                    with open(f'{self._prefix_path}-hibp-domain-search.json', 'w', encoding='utf8') as buf:
-                        buf.write(json.dumps(hibp_json, default=str))
-                    breach_search_results = hibp_json.get('BreachSearchResults') or []
-                    paste_search_results = hibp_json.get('PasteSearchResults') or []
+                    hibp_token = hibp_json.get('Token')
+                else:
+                    logger.warning(f'[{job.queue_data.target}] haveibeenpwned.com/api/domainverification/verifymetatag status_code {res.status_code}')
             except Exception as err:
                 logger.warning(err)
 
-        for hibp_res in breach_search_results:
-            for hibp_breach in hibp_res['Breaches']:
-                self.report['domain_stats'].append(DomainStat(
-                    domain_id=self.job.domain.domain_id,
-                    domain_stat=DomainStat.HIBP_EXPOSURE,
-                    domain_value=hibp_breach.get('Domain'),
-                    domain_data=hibp_breach
-                ))
-        for hibp_res in paste_search_results:
-            for hibp_paste in hibp_res['Pastes']:
-                self.report['domain_stats'].append(DomainStat(
-                    domain_id=self.job.domain.domain_id,
-                    domain_stat=DomainStat.HIBP_DISCLOSURE,
-                    domain_value=hibp_paste.get('Source'),
-                    domain_data=hibp_paste
-                ))
+    return hibp_token
 
-    def check_hibp_breaches(self):
+def check_hibp_domian_monitor(job :JobRun, metadata :Metadata):
+    html_content = metadata.website_content()
+    hibp_token = get_domian_monitor_token_dns(job)
+    if hibp_token is None:
+        hibp_token = get_domian_monitor_token_meta(job, html_content)
+    if hibp_token is None:
+        hibp_token = get_domian_monitor_token_file(job)
+    if hibp_token is not None:
         try:
-            breaches_url = f'https://haveibeenpwned.com/api/v3/breaches?domain={self.job.domain.name}'
-            logger.debug(breaches_url)
-            res = requests.get(breaches_url, timeout=3)
+            verify_url = f'https://haveibeenpwned.com/DomainSearch/{hibp_token}/Json'
+            logger.debug(verify_url)
+            res = requests.get(verify_url, timeout=3)
             if res.status_code == 200:
-                hibp_breaches = res.json()
-                logger.debug(hibp_breaches)
-                with open(f'{self._prefix_path}-hibp-breaches.json', 'w', encoding='utf8') as buf:
-                    buf.write(json.dumps(hibp_breaches, default=str))
-                for hibp_breach in hibp_breaches:
-                    self.report['domain_stats'].append(DomainStat(
-                        domain_id=self.job.domain.domain_id,
-                        domain_stat=DomainStat.HIBP_BREACH,
-                        domain_value=hibp_breach.get('BreachDate'),
-                        domain_data=hibp_breach
-                    ))
-            else:
-                logger.warning(f'[{self.job.domain.name}] haveibeenpwned.com/api/v3/breaches status_code {res.status_code}')
+                hibp_json = res.json()
+                logger.debug(hibp_json)
+                es.index(index=Indexes.hibp_monitor, id=job.queue_data.target, body=json.dumps(hibp_json, default=str))
+                return hibp_json
         except Exception as err:
             logger.warning(err)
+
+def check_hibp_breaches(job :JobRun):
+    """
+    [{"Name": "LinkedIn", "Title": "LinkedIn", "Domain": "linkedin.com", "BreachDate": "2012-05-05", "AddedDate": "2016-05-21T21:35:40Z", "ModifiedDate": "2016-05-21T21:35:40Z",
+    "PwnCount": 164611595, "Description": "In May 2016, <a href=\"https://www.troyhunt.com/observations-and-thoughts-on-the-linkedin-data-breach\" target=\"_blank\" rel=\"noopener\">LinkedIn had 164 million email addresses and passwords exposed</a>. Originally hacked in 2012, the data remained out of sight until being offered for sale on a dark market site 4 years later. The passwords in the breach were stored as SHA1 hashes without salt, the vast majority of which were quickly cracked in the days following the release of the data.",
+    "LogoPath": "https://haveibeenpwned.com/Content/Images/PwnedLogos/LinkedIn.png",
+    "DataClasses": ["Email addresses", "Passwords"],
+    "IsVerified": true, "IsFabricated": false, "IsSensitive": false, "IsRetired": false, "IsSpamList": false}]
+    """
+    try:
+        breaches_url = f'https://haveibeenpwned.com/api/v3/breaches?domain={job.queue_data.target}'
+        logger.debug(breaches_url)
+        res = requests.get(breaches_url, timeout=3)
+        if res.status_code == 200:
+            hibp_json = res.json()
+            logger.debug(hibp_json)
+            if isinstance(hibp_json, list) and len(hibp_json) > 0:
+                es.index(index=Indexes.hibp_breaches, id=job.queue_data.target, body=json.dumps(hibp_json, default=str))
+                return hibp_json
+        else:
+            logger.warning(f'[{job.queue_data.target}] haveibeenpwned.com/api/v3/breaches status_code {res.status_code}')
+    except Exception as err:
+        logger.warning(err)

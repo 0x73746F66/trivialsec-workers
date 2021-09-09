@@ -1,7 +1,6 @@
 from datetime import datetime
 import logging
 import tldextract
-from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.models.member import Member
 from trivialsec.services.jobs import queue_job as service_queue_job
 from trivialsec.models import UpdateTable
@@ -9,12 +8,8 @@ from trivialsec.models.service_type import ServiceType
 from trivialsec.models.notification import Notification
 from trivialsec.models.job_run import JobRun, JobRuns
 from trivialsec.models.domain import Domain
-from trivialsec.models.domain_stat import DomainStat
 from trivialsec.models.finding import Finding
 from trivialsec.models.security_alert import SecurityAlert
-from trivialsec.models.known_ip import KnownIp
-from trivialsec.models.dns_record import DnsRecord
-from trivialsec.models.inventory import InventoryItem
 from worker.sockets import send_event
 
 
@@ -26,31 +21,18 @@ class WorkerInterface:
     report_template_types = {
         'findings': Finding,
         'security_alerts': SecurityAlert,
-        'known_ips': KnownIp,
-        'dns_records': DnsRecord,
         'domains': Domain,
-        'domain_stats': DomainStat,
-        'inventory_items': InventoryItem,
         'updates': UpdateTable,
     }
     report = {
         'findings': [],
         'security_alerts': [],
-        'known_ips': [],
-        'dns_records': [],
-        'domains': [],
-        'domain_stats': [],
-        'inventory_items': [],
         'updates': [],
     }
     invalidations = {
         'findings': ['findings/finding_id/{finding_id}'],
         'security_alerts': ['security_alerts/security_alert_id/{security_alert_id}'],
-        'known_ips': ['known_ips/known_ip_id/{known_ip_id}'],
-        'dns_records': ['dns_records/dns_record_id/{dns_record_id}'],
         'domains': ['domains/domain_id/{domain_id}'],
-        'domain_stats': ['domain_stats/domain_id/{domain_id}'],
-        'inventory_items': ['inventory_items/program_id/{program_id}'],
         'updates': [],
     }
 
@@ -152,63 +134,63 @@ class WorkerInterface:
                 'alert': alert_dict,
             })
 
-    def _save_domain_stats(self, domain_stats :list):
-        for domain_stat in domain_stats:
-            cache_keys = []
-            exists_params = []
-            if domain_stat.domain_stats_id:
-                exists_params.append(('domain_stats_id', domain_stat.domain_stats_id))
-            else:
-                exists_params.extend([
-                    ('domain_id', domain_stat.domain_id),
-                    ('domain_stat', domain_stat.domain_stat),
-                    ('domain_value', domain_stat.domain_value)
-                ])
+    # def _save_domain_stats(self, domain_stats :list):
+    #     for domain_stat in domain_stats:
+    #         cache_keys = []
+    #         exists_params = []
+    #         if domain_stat.domain_stats_id:
+    #             exists_params.append(('domain_stats_id', domain_stat.domain_stats_id))
+    #         else:
+    #             exists_params.extend([
+    #                 ('domain_id', domain_stat.domain_id),
+    #                 ('domain_stat', domain_stat.domain_stat),
+    #                 ('domain_value', domain_stat.domain_value)
+    #             ])
 
-            exists = domain_stat.exists(exists_params)
-            if exists:
-                old_domain_stat = DomainStat()
-                old_domain_stat.domain_stats_id = domain_stat.domain_stats_id
-                old_domain_stat.hydrate()
-                domain_stat.created_at = old_domain_stat.created_at
-                for cache_key in self.invalidations['domain_stats']:
-                    if '{domain_id}' in cache_key:
-                        cache_keys.append(cache_key.format(domain_id=domain_stat.domain_id))
-            domain_stat.persist(exists=exists, invalidations=cache_keys)
+    #         exists = domain_stat.exists(exists_params)
+    #         if exists:
+    #             old_domain_stat = DomainStat()
+    #             old_domain_stat.domain_stats_id = domain_stat.domain_stats_id
+    #             old_domain_stat.hydrate()
+    #             domain_stat.created_at = old_domain_stat.created_at
+    #             for cache_key in self.invalidations['domain_stats']:
+    #                 if '{domain_id}' in cache_key:
+    #                     cache_keys.append(cache_key.format(domain_id=domain_stat.domain_id))
+    #         domain_stat.persist(exists=exists, invalidations=cache_keys)
 
-    def _save_inventory_items(self, inventory_items :list):
-        for inventory_item in inventory_items:
-            cache_keys = []
-            inventory_item.account_id = self.job.account_id
-            inventory_item.project_id = self.job.project_id
+    # def _save_inventory_items(self, inventory_items :list):
+    #     for inventory_item in inventory_items:
+    #         cache_keys = []
+    #         inventory_item.account_id = self.job.account_id
+    #         inventory_item.project_id = self.job.project_id
 
-            checks = [('program_id', inventory_item.program_id), ('source_description', inventory_item.source_description)]
-            if inventory_item.domain_id:
-                checks.append(('domain_id', inventory_item.domain_id))
-            original_version = None
-            if inventory_item.version:
-                original_version = inventory_item.version
+    #         checks = [('program_id', inventory_item.program_id), ('source_description', inventory_item.source_description)]
+    #         if inventory_item.domain_id:
+    #             checks.append(('domain_id', inventory_item.domain_id))
+    #         original_version = None
+    #         if inventory_item.version:
+    #             original_version = inventory_item.version
 
-            exists = inventory_item.exists(checks)
-            if exists:
-                inventory_item.hydrate()
-                if original_version is not None:
-                    inventory_item.version = original_version
-                for cache_key in self.invalidations['inventory_items']:
-                    if '{program_id}' in cache_key:
-                        cache_keys.append(cache_key.format(program_id=inventory_item.program_id))
-                old_program = InventoryItem(inventory_item_id=inventory_item.inventory_item_id)
-                old_program.hydrate()
-                inventory_item.created_at = old_program.created_at
-            inventory_item.last_checked = datetime.utcnow().isoformat()
-            inventory_item.persist(exists=exists, invalidations=cache_keys)
-            inventory_dict = {}
-            for col in inventory_item.cols():
-                inventory_dict[col] = getattr(inventory_item, col)
-            send_event('inventory_changes', {
-                'socket_key': self.job.account.socket_key,
-                'inventory': inventory_dict,
-            })
+    #         exists = inventory_item.exists(checks)
+    #         if exists:
+    #             inventory_item.hydrate()
+    #             if original_version is not None:
+    #                 inventory_item.version = original_version
+    #             for cache_key in self.invalidations['inventory_items']:
+    #                 if '{program_id}' in cache_key:
+    #                     cache_keys.append(cache_key.format(program_id=inventory_item.program_id))
+    #             old_program = InventoryItem(inventory_item_id=inventory_item.inventory_item_id)
+    #             old_program.hydrate()
+    #             inventory_item.created_at = old_program.created_at
+    #         inventory_item.last_checked = datetime.utcnow().isoformat()
+    #         inventory_item.persist(exists=exists, invalidations=cache_keys)
+    #         inventory_dict = {}
+    #         for col in inventory_item.cols():
+    #             inventory_dict[col] = getattr(inventory_item, col)
+    #         send_event('inventory_changes', {
+    #             'socket_key': self.job.account.socket_key,
+    #             'inventory': inventory_dict,
+    #         })
 
     def _save_domains(self, domains :list):
         utcnow = datetime.utcnow()
@@ -240,7 +222,7 @@ class WorkerInterface:
                         description=f'Apex domain {apex.name} saved via {self.job.queue_data.service_type_category}',
                         url=f'/domain/{apex.domain_id}'
                     ).persist()
-                    queue_job(self.job, 'metadata', apex.name, scan_next=['drill', 'testssl', 'nmap'])
+                    queue_job(self.job, 'metadata', apex.name, target_type='domain')
                     apex_dict = {}
                     for col in domain.cols():
                         apex_dict[col] = getattr(apex, col)
@@ -258,7 +240,7 @@ class WorkerInterface:
                     if '{domain_id}' in cache_key:
                         cache_keys.append(cache_key.format(domain_id=domain.domain_id))
                 original_domain = Domain(domain_id=domain.domain_id)
-                original_domain.hydrate()
+                original_domain.hydrate() #domain.hydrate(query_string=f'domain_name:"{domain_name}"')
                 domain.source = original_domain.source
                 domain.created_at = original_domain.created_at
                 domain.enabled = original_domain.enabled
@@ -274,7 +256,7 @@ class WorkerInterface:
                     description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
                     url=f'/domain/{domain.domain_id}'
                 ).persist()
-                queue_job(self.job, 'metadata', domain.name, scan_next=['drill', 'testssl', 'nmap'])
+                queue_job(self.job, 'metadata', domain.name, target_type='domain')
                 domain_dict = {}
                 for col in domain.cols():
                     domain_dict[col] = getattr(domain, col)
@@ -284,65 +266,65 @@ class WorkerInterface:
                     'domain': domain_dict,
                 })
 
-    def _save_known_ips(self, known_ips :list):
-        for known_ip in known_ips:
-            cache_keys = []
-            if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
-                continue
+    # def _save_known_ips(self, known_ips :list):
+    #     for known_ip in known_ips:
+    #         cache_keys = []
+    #         if known_ip.ip_address in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
+    #             continue
 
-            known_ip.account_id = self.job.account_id
-            known_ip.project_id = self.job.project_id
-            exists_params = ['ip_address']
-            if known_ip.domain_id:
-                exists_params.append('domain_id')
-            else:
-                exists_params.append('account_id')
-            exists = known_ip.exists(exists_params)
-            if exists:
-                for cache_key in self.invalidations['known_ips']:
-                    if '{known_ip_id}' in cache_key:
-                        cache_keys.append(cache_key.format(known_ip_id=known_ip.known_ip_id))
-                known_ip.updated_at = datetime.utcnow()
-            if is_valid_ipv4_address(known_ip.ip_address):
-                known_ip.ip_version = 'ipv4'
-            elif is_valid_ipv6_address(known_ip.ip_address):
-                known_ip.ip_version = 'ipv6'
-            known_ip.persist(exists=exists, invalidations=cache_keys)
-            ip_dict = {}
-            for col in known_ip.cols():
-                ip_dict[col] = getattr(known_ip, col)
-            send_event('ipaddr_changes', {
-                'socket_key': self.job.account.socket_key,
-                'ipaddr': ip_dict,
-            })
+    #         known_ip.account_id = self.job.account_id
+    #         known_ip.project_id = self.job.project_id
+    #         exists_params = ['ip_address']
+    #         if known_ip.domain_id:
+    #             exists_params.append('domain_id')
+    #         else:
+    #             exists_params.append('account_id')
+    #         exists = known_ip.exists(exists_params)
+    #         if exists:
+    #             for cache_key in self.invalidations['known_ips']:
+    #                 if '{known_ip_id}' in cache_key:
+    #                     cache_keys.append(cache_key.format(known_ip_id=known_ip.known_ip_id))
+    #             known_ip.updated_at = datetime.utcnow()
+    #         if is_valid_ipv4_address(known_ip.ip_address):
+    #             known_ip.ip_version = 'ipv4'
+    #         elif is_valid_ipv6_address(known_ip.ip_address):
+    #             known_ip.ip_version = 'ipv6'
+    #         known_ip.persist(exists=exists, invalidations=cache_keys)
+    #         ip_dict = {}
+    #         for col in known_ip.cols():
+    #             ip_dict[col] = getattr(known_ip, col)
+    #         send_event('ipaddr_changes', {
+    #             'socket_key': self.job.account.socket_key,
+    #             'ipaddr': ip_dict,
+    #         })
 
-    def _save_dns_records(self, dns_records :list):
-        for dns_record in dns_records:
-            if dns_record.answer in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
-                continue
-            if not dns_record.domain_id:
-                logger.warning(f'domain_id missing from dns_record {dns_record.raw}')
-                continue
-            cache_keys = []
-            dns_record.last_checked = datetime.utcnow()
-            exists = dns_record.exists([
-                    'domain_id',
-                    'resource',
-                    'answer',
-                ])
-            if exists:
-                for cache_key in self.invalidations['dns_records']:
-                    if '{dns_record_id}' in cache_key:
-                        cache_keys.append(cache_key.format(dns_record_id=dns_record.dns_record_id))
-            if dns_record.raw:
-                dns_record.persist(exists=exists, invalidations=cache_keys)
-                dns_dict = {}
-                for col in dns_record.cols():
-                    dns_dict[col] = getattr(dns_record, col)
-                send_event('dns_changes', {
-                    'socket_key': self.job.account.socket_key,
-                    'dns': dns_dict,
-                })
+    # def _save_dns_records(self, dns_records :list):
+    #     for dns_record in dns_records:
+    #         if dns_record.answer in ('127.0.0.1', '::1', '::', '0:0:0:0:0:0:0:1'):
+    #             continue
+    #         if not dns_record.domain_id:
+    #             logger.warning(f'domain_id missing from dns_record {dns_record.raw}')
+    #             continue
+    #         cache_keys = []
+    #         dns_record.last_checked = datetime.utcnow()
+    #         exists = dns_record.exists([
+    #                 'domain_id',
+    #                 'resource',
+    #                 'answer',
+    #             ])
+    #         if exists:
+    #             for cache_key in self.invalidations['dns_records']:
+    #                 if '{dns_record_id}' in cache_key:
+    #                     cache_keys.append(cache_key.format(dns_record_id=dns_record.dns_record_id))
+    #         if dns_record.raw:
+    #             dns_record.persist(exists=exists, invalidations=cache_keys)
+    #             dns_dict = {}
+    #             for col in dns_record.cols():
+    #                 dns_dict[col] = getattr(dns_record, col)
+    #             send_event('dns_changes', {
+    #                 'socket_key': self.job.account.socket_key,
+    #                 'dns': dns_dict,
+    #             })
 
     def _save_update_fields(self, updates :list):
         for update_table in updates:
@@ -353,22 +335,14 @@ class WorkerInterface:
             self._save_findings(self.report['findings'])
         if 'security_alerts' in self.report:
             self._save_security_alerts(self.report['security_alerts'])
-        if 'inventory_items' in self.report:
-            self._save_inventory_items(self.report['inventory_items'])
         if 'domains' in self.report:
             self._save_domains(self.report['domains'])
-        if 'known_ips' in self.report:
-            self._save_known_ips(self.report['known_ips'])
-        if 'dns_records' in self.report:
-            self._save_dns_records(self.report['dns_records'])
         if 'updates' in self.report:
             self._save_update_fields(self.report['updates'])
-        if 'domain_stats' in self.report:
-            self._save_domain_stats(self.report['domain_stats'])
 
         if isinstance(self.job.queue_data.scan_next, list):
             for job_name in self.job.queue_data.scan_next:
-                queue_job(self.job, job_name, self.job.domain.name)
+                queue_job(self.job, job_name, self.job.domain.name, target_type='domain')
 
         return True
 
@@ -444,8 +418,9 @@ def handle_error(err, job: JobRun):
         url=url,
     ).persist()
 
-def queue_job(original_job: JobRuns, name :str, target :str = None, scan_next :list = []):
+def queue_job(original_job: JobRuns, name :str, target :str = None, target_type :str = None):
     target = target or original_job.queue_data.target
+    target_type = target_type or original_job.queue_data.target_type
     service_type = ServiceType(name=name)
     service_type.hydrate(['name'])
     job_runs = JobRuns()
@@ -467,7 +442,6 @@ def queue_job(original_job: JobRuns, name :str, target :str = None, scan_next :l
         member=member,
         project=original_job.project,
         priority=0,
-        params={'target': target},
-        on_demand=False,
-        scan_next=scan_next,
+        params={'target': target, 'target_type': target_type},
+        on_demand=False
     )

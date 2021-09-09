@@ -3,8 +3,6 @@ from xml.etree import ElementTree # nosemgrep: python.lang.security.use-defused-
 import logging
 import requests
 from trivialsec.models.domain import Domain
-from trivialsec.models.known_ip import KnownIp
-from trivialsec.models.dns_record import DnsRecord
 from trivialsec.models.finding_detail import FindingDetail
 from trivialsec.models.finding import Finding
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address, check_domain_rules
@@ -303,57 +301,57 @@ class Worker(WorkerInterface):
                     source=f'DNS {self.job.domain.name}',
                 ))
 
-            dns_record = DnsRecord(
-                ttl=ttl,
-                dns_class=dns_class,
-                resource=resource,
-                answer=answer,
-                raw=dns_record_raw
-            )
-            if isinstance(self.job.domain, Domain):
-                dns_record.domain_id = self.job.domain.domain_id
-            self.report['dns_records'].append(dns_record)
+        #     dns_record = DnsRecord(
+        #         ttl=ttl,
+        #         dns_class=dns_class,
+        #         resource=resource,
+        #         answer=answer,
+        #         raw=dns_record_raw
+        #     )
+        #     if isinstance(self.job.domain, Domain):
+        #         dns_record.domain_id = self.job.domain.domain_id
+        #     self.report['dns_records'].append(dns_record)
 
-            if dns_record.resource.upper() == 'CNAME':
-                domain_name = dns_record.answer.strip() if not dns_record.answer.endswith('.') else dns_record.answer[:-1].strip()
-                if self.job.domain.name != domain_name and not domain_name.endswith('.arpa'):
-                    new_domain = Domain(name=domain_name, project_id=self.job.project_id)
-                    if domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
-                        new_domain.parent_domain_id = self.job.domain.domain_id
-                    new_domain.source = f'DNS {dns_record.raw}'
-                    new_domain.enabled = False
-                    self.report['domains'].append(new_domain)
+        #     if dns_record.resource.upper() == 'CNAME':
+        #         domain_name = dns_record.answer.strip() if not dns_record.answer.endswith('.') else dns_record.answer[:-1].strip()
+        #         if self.job.domain.name != domain_name and not domain_name.endswith('.arpa'):
+        #             new_domain = Domain(name=domain_name, project_id=self.job.project_id)
+        #             if domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
+        #                 new_domain.parent_domain_id = self.job.domain.domain_id
+        #             new_domain.source = f'DNS {dns_record.raw}'
+        #             new_domain.enabled = False
+        #             self.report['domains'].append(new_domain)
 
-            if is_valid_ipv4_address(fqdn) or is_valid_ipv6_address(fqdn):
-                known_ip = KnownIp(ip_address=fqdn.strip(), source=f'DNS {dns_record.raw}')
-                if isinstance(self.job.domain, Domain):
-                    known_ip.domain_id = self.job.domain.domain_id
-                self.report['known_ips'].append(known_ip)
-            if is_valid_ipv4_address(answer) or is_valid_ipv6_address(answer):
-                known_ip = KnownIp(ip_address=answer.strip(), source=f'DNS {dns_record.raw}')
-                if isinstance(self.job.domain, Domain):
-                    known_ip.domain_id = self.job.domain.domain_id
-                self.report['known_ips'].append(known_ip)
+        #     if is_valid_ipv4_address(fqdn) or is_valid_ipv6_address(fqdn):
+        #         known_ip = KnownIp(ip_address=fqdn.strip(), source=f'DNS {dns_record.raw}')
+        #         if isinstance(self.job.domain, Domain):
+        #             known_ip.domain_id = self.job.domain.domain_id
+        #         self.report['known_ips'].append(known_ip)
+        #     if is_valid_ipv4_address(answer) or is_valid_ipv6_address(answer):
+        #         known_ip = KnownIp(ip_address=answer.strip(), source=f'DNS {dns_record.raw}')
+        #         if isinstance(self.job.domain, Domain):
+        #             known_ip.domain_id = self.job.domain.domain_id
+        #         self.report['known_ips'].append(known_ip)
 
-        for dns_record in self.report.get('dns_records'):
-            if dns_record.resource.upper() not in ['CNAME', 'NS']:
-                continue
-            host = dns_record.answer if not dns_record.answer.endswith('.') else dns_record.answer[:-1]
-            if dns_record.resource.upper() == 'CNAME':
-                self._check_cname(host, dns_record)
-            if dns_record.resource.upper() == 'NS':
-                self._check_ns(host, dns_record)
-            if dns_record.resource.upper() == 'A':
-                self._check_a(host, dns_record)
+        # for dns_record in self.report.get('dns_records'):
+        #     if dns_record.resource.upper() not in ['CNAME', 'NS']:
+        #         continue
+        #     host = dns_record.answer if not dns_record.answer.endswith('.') else dns_record.answer[:-1]
+        #     if dns_record.resource.upper() == 'CNAME':
+        #         self._check_cname(host, dns_record)
+        #     if dns_record.resource.upper() == 'NS':
+        #         self._check_ns(host, dns_record)
+        #     if dns_record.resource.upper() == 'A':
+        #         self._check_a(host, dns_record)
 
         return True
 
-    def _check_cname(self, host, dns_record: DnsRecord):
+    def _check_cname(self, host, dns_record):
         metadata = Metadata(url=f'https://{host}')
         metadata.verification_check()
         if metadata.dns_answer:
             logger.info(f'DNS {host} {metadata.dns_answer}')
-        if metadata.registered:
+        if metadata.dns_registered:
             return
         for host_segment, provider, ignore_list, verification_check in self.providers:
             if ignore_list and self._matches_in_list(host, ignore_list):
@@ -394,7 +392,7 @@ class Worker(WorkerInterface):
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
 
-    def _check_ns(self, host, dns_record: DnsRecord):
+    def _check_ns(self, host, dns_record):
         for host_segment, provider, ignore_list, verification_check in self.managed_dns:
             if host_segment not in host:
                 continue
@@ -434,7 +432,7 @@ class Worker(WorkerInterface):
             finding.finding_detail_id = finding_detail.finding_detail_id
             self.report['findings'].append(finding)
 
-    def _check_a(self, ip_addr, dns_record: DnsRecord):
+    def _check_a(self, ip_addr, dns_record):
         for a_record, provider, ignore_list, verification_check in self.a_takeovers:
             if a_record != ip_addr:
                 continue
@@ -490,7 +488,7 @@ class Worker(WorkerInterface):
         return matched
 
     @staticmethod
-    def check_missing_bucket(domain_name :str, host_segment :str, provider :str, dns_record: DnsRecord):
+    def check_missing_bucket(domain_name :str, host_segment :str, provider :str, dns_record):
         evidence = None
         proxies = None
         if config.http_proxy or config.https_proxy:

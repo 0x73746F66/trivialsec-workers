@@ -250,7 +250,7 @@ if __name__ == "__main__":
             name=current_job.queue_data.target,
             project_id=current_job.project_id,
         )
-        if domain.hydrate(['name', 'project_id']):
+        if domain.hydrate(['name', 'project_id']): #domain.hydrate(query_string=f'domain_name:"{domain_name}"')
             setattr(current_job, 'domain', domain)
 
     try:

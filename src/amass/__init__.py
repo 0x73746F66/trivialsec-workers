@@ -5,7 +5,6 @@ import logging
 from socket import getaddrinfo, AF_INET6, AF_INET
 from os import path, getcwd
 from trivialsec.models.domain import Domain
-from trivialsec.models.known_ip import KnownIp
 from trivialsec.helpers import is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.config import config
 from worker import WorkerInterface
@@ -372,43 +371,43 @@ class Worker(WorkerInterface):
                     if address['ip'] not in ip_dict:
                         ip_dict[address['ip'].strip()] = address
 
-        for domain_name in domains:
-            if self.job.domain.name == domain_name \
-                or domain_name.startswith('www.www.')\
-                or domain_name.endswith('.arpa'):
-                continue
-            new_domain = Domain(name=domain_name)
-            if not domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
-                new_domain.parent_domain_id = self.job.domain.domain_id
-            new_domain.source = ','.join(domains_dict[domain_name].get('sources'))
-            new_domain.enabled = False
-            self.report['domains'].append(new_domain)
-            try:
-                for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 443):
-                    if family == AF_INET6:
-                        ip_list.add(sock_addr[0].strip())
-                    if family == AF_INET:
-                        ip_list.add(sock_addr[0].strip())
-                    ip_dict[sock_addr[0].strip()] = {}
-            except IOError:
-                pass
-            try:
-                for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 80):
-                    if family == AF_INET6:
-                        ip_list.add(sock_addr[0].strip())
-                    if family == AF_INET:
-                        ip_list.add(sock_addr[0].strip())
-                    ip_dict[sock_addr[0].strip()] = {}
-            except IOError:
-                pass
+        # for domain_name in domains:
+        #     if self.job.domain.name == domain_name \
+        #         or domain_name.startswith('www.www.')\
+        #         or domain_name.endswith('.arpa'):
+        #         continue
+        #     new_domain = Domain(name=domain_name)
+        #     if not domain_name.endswith(self.job.domain.name) and not self.job.domain.name == domain_name:
+        #         new_domain.parent_domain_id = self.job.domain.domain_id
+        #     new_domain.source = ','.join(domains_dict[domain_name].get('sources'))
+        #     new_domain.enabled = False
+        #     self.report['domains'].append(new_domain)
+        #     try:
+        #         for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 443):
+        #             if family == AF_INET6:
+        #                 ip_list.add(sock_addr[0].strip())
+        #             if family == AF_INET:
+        #                 ip_list.add(sock_addr[0].strip())
+        #             ip_dict[sock_addr[0].strip()] = {}
+        #     except IOError:
+        #         pass
+        #     try:
+        #         for family, _, _, _, sock_addr in getaddrinfo(new_domain.name, 80):
+        #             if family == AF_INET6:
+        #                 ip_list.add(sock_addr[0].strip())
+        #             if family == AF_INET:
+        #                 ip_list.add(sock_addr[0].strip())
+        #             ip_dict[sock_addr[0].strip()] = {}
+        #     except IOError:
+        #         pass
 
-        for ip_addr in ip_list:
-            self.report['known_ips'].append(KnownIp(
-                domain_id=self.job.domain.domain_id,
-                ip_address=ip_addr,
-                source=ip_dict[ip_addr].get('source', 'DNS'),
-                asn_code=ip_dict[ip_addr].get('asn'),
-                asn_name=ip_dict[ip_addr].get('desc'),
-            ))
+        # for ip_addr in ip_list:
+        #     self.report['known_ips'].append(KnownIp(
+        #         domain_id=self.job.domain.domain_id,
+        #         ip_address=ip_addr,
+        #         source=ip_dict[ip_addr].get('source', 'DNS'),
+        #         asn_code=ip_dict[ip_addr].get('asn'),
+        #         asn_name=ip_dict[ip_addr].get('desc'),
+        #     ))
 
         return True

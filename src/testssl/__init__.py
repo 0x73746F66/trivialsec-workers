@@ -6,8 +6,6 @@ from os import path, getcwd
 from trivialsec.models.domain import Domain
 from trivialsec.models.finding_detail import FindingDetail
 from trivialsec.models.finding import Finding
-from trivialsec.models.inventory import InventoryItem
-from trivialsec.models.program import Program
 from trivialsec.helpers import oneway_hash, is_valid_ipv4_address, is_valid_ipv6_address
 from trivialsec.helpers.transport import extract_server_version
 from worker import WorkerInterface
@@ -309,24 +307,24 @@ class Worker(WorkerInterface):
             server_name, program_version = extract_server_version(program_value)
             if server_name is None:
                 continue
-            program = Program(name=server_name)
-            program.hydrate('name')
-            if program.category is None:
-                if match_text == reverse_proxy_banner:
-                    program.category = 'proxy'
-                elif match_text == server_banner:
-                    program.category = 'server'
-                elif match_text == application_banner:
-                    program.category = 'application'
-            if program.program_id is None:
-                program.persist()
-            self.report['inventory_items'].append(InventoryItem(
-                program_id=program.program_id,
-                project_id=self.job.domain.project_id,
-                domain_id=self.job.domain.domain_id,
-                version=program_version,
-                source_description=f'HTTP Header [{program.category}] of {self.job.domain.name}'
-            ))
+            # program = Program(name=server_name)
+            # program.hydrate('name')
+            # if program.category is None:
+            #     if match_text == reverse_proxy_banner:
+            #         program.category = 'proxy'
+            #     elif match_text == server_banner:
+            #         program.category = 'server'
+            #     elif match_text == application_banner:
+            #         program.category = 'application'
+            # if program.program_id is None:
+            #     program.persist()
+            # self.report['inventory_items'].append(InventoryItem(
+            #     program_id=program.program_id,
+            #     project_id=self.job.domain.project_id,
+            #     domain_id=self.job.domain.domain_id,
+            #     version=program_version,
+            #     source_description=f'HTTP Header [{program.category}] of {self.job.domain.name}'
+            # ))
 
         san_matched = re.findall(r'(subjectAltName)(.*$)', log_output, re.MULTILINE)
         if san_matched:
