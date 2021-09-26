@@ -33,6 +33,7 @@ services:
     volumes:
       - ./src/metadata:/srv/app/metadata
       - ./src/worker:/srv/app/worker
+      - ./src/job_run.py:/srv/app/job_run.py
       - ./src/main.py:/srv/app/main.py
       - ./src/s3_upload.py:/srv/app/s3_upload.py
     networks:

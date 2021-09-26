@@ -20,3 +20,7 @@ deploy/
 **/*.tgz
 **/*.zip
 python-libs/
+docker_old/
+datafiles/
+.repo/
+.history/
