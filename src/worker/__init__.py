@@ -32,7 +32,7 @@ class WorkerInterface:
     invalidations = {
         'findings': ['findings/finding_id/{finding_id}'],
         'security_alerts': ['security_alerts/security_alert_id/{security_alert_id}'],
-        'domains': ['domains/domain_id/{domain_id}'],
+        'domains': ['domains/domain_name/{domain_name}'],
         'updates': [],
     }
 
@@ -77,8 +77,8 @@ class WorkerInterface:
                 ('project_id', finding.project_id),
                 ('finding_detail_id', finding.finding_detail_id),
             ]
-            if finding.domain_id:
-                exists_params.append(('domain_id', finding.domain_id))
+            if finding.domain_name:
+                exists_params.append(('domain_name', finding.domain_name))
             exists = finding.exists(exists_params)
             if exists:
                 for cache_key in self.invalidations['findings']:
@@ -193,78 +193,7 @@ class WorkerInterface:
     #         })
 
     def _save_domains(self, domains :list):
-        utcnow = datetime.utcnow()
-        for domain in domains:
-            cache_keys = []
-            if domain.name in ('localhost', self.job.domain.name) or domain.name.endswith('.arpa'):
-                continue
-            if domain.name.startswith('*.'):
-                domain.name = domain.name[2:]
-
-            ext = tldextract.extract(f'http://{domain.name}')
-            if domain.parent_domain_id is None and ext.registered_domain != domain.name:
-                apex = Domain(
-                    name=ext.registered_domain,
-                    account_id=self.job.account_id,
-                    project_id=self.job.project_id,
-                    source=domain.source,
-                    created_at=utcnow,
-                    updated_at=utcnow,
-                    deleted=False,
-                    enabled=False
-                )
-                apex_exists = apex.exists(['name', 'project_id'])
-                domain.parent_domain_id = apex.domain_id
-                if not apex_exists:
-                    apex.persist(exists=apex_exists)
-                    Notification(
-                        account_id=self.job.account_id,
-                        description=f'Apex domain {apex.name} saved via {self.job.queue_data.service_type_category}',
-                        url=f'/domain/{apex.domain_id}'
-                    ).persist()
-                    queue_job(self.job, 'metadata', apex.name, target_type='domain')
-                    apex_dict = {}
-                    for col in domain.cols():
-                        apex_dict[col] = getattr(apex, col)
-                    send_event('domain_changes', {
-                        'socket_key': self.job.account.socket_key,
-                        'domain': apex_dict,
-                    })
-
-            domain.account_id = self.job.account_id
-            domain.project_id = self.job.project_id
-            domain.enabled = False
-            exists = domain.exists(['name', 'project_id'])
-            if exists:
-                for cache_key in self.invalidations['domains']:
-                    if '{domain_id}' in cache_key:
-                        cache_keys.append(cache_key.format(domain_id=domain.domain_id))
-                original_domain = Domain(domain_id=domain.domain_id)
-                original_domain.hydrate() #domain.hydrate(query_string=f'domain_name:"{domain_name}"')
-                domain.source = original_domain.source
-                domain.created_at = original_domain.created_at
-                domain.enabled = original_domain.enabled
-                domain.schedule = original_domain.schedule
-                if domain.screenshot is None:
-                    domain.screenshot = original_domain.screenshot
-            domain.deleted = False
-            domain.updated_at = utcnow
-            cache_keys.append(f'page_projects/{domain.account_id}')
-            if domain.persist(exists=exists, invalidations=cache_keys):
-                Notification(
-                    account_id=self.job.account_id,
-                    description=f'Domain {domain.name} saved via {self.job.queue_data.service_type_category}',
-                    url=f'/domain/{domain.domain_id}'
-                ).persist()
-                queue_job(self.job, 'metadata', domain.name, target_type='domain')
-                domain_dict = {}
-                for col in domain.cols():
-                    domain_dict[col] = getattr(domain, col)
-
-                send_event('domain_changes', {
-                    'socket_key': self.job.account.socket_key,
-                    'domain': domain_dict,
-                })
+        pass
 
     # def _save_known_ips(self, known_ips :list):
     #     for known_ip in known_ips:
@@ -408,7 +337,7 @@ def handle_error(err, job: JobRun):
         logger.error(err)
     update_state(job, ServiceType.STATE_ERROR, err)
     if hasattr(job, 'domain'):
-        url=f'/domain/{job.domain.domain_id}/jobs'
+        url=f'/domain/{job.domain.domain_name}'
     else:
         url=f'/project/{job.project_id}'
 

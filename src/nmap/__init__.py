@@ -221,10 +221,16 @@ class Worker(WorkerInterface):
                 continue
             for script in port['script']:
                 output = script['@output'].strip().splitlines()
+                if script['@id'] == 'whois-ip':
+                    pass # TODO https://nmap.org/nsedoc/scripts/whois-ip.html
+                if script['@id'] == 'firewalk':
+                    pass # TODO https://nmap.org/nsedoc/scripts/firewalk.html
+                if script['@id'] == 'smb-os-discovery':
+                    pass # TODO https://nmap.org/nsedoc/scripts/smb-os-discovery.html
                 if script['@id'] == 'http-xssed':
-                    pass
+                    pass # TODO https://nmap.org/nsedoc/scripts/http-xssed.html
                 if script['@id'] == 'ssl-ccs-injection':
-                    pass
+                    pass # TODO https://nmap.org/nsedoc/scripts/ssl-ccs-injection.html
                 if script['@id'] == 'vulscan':
                     logger.info(json.dumps(self._normalise_vulscan(output)))
 

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def get_options() -> dict:
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--service-id', help='service instance', dest='service_type_id', default=None)
-    parser.add_argument('-s', '--service-name', help='service instance', dest='service_type_name', default=None)
+    parser.add_argument('-n', '--service-name', help='service instance', dest='service_type_name', default=None)
     parser.add_argument('-w', '--worker-id', help='unique service instance id', dest='worker_id', default=None)
     parser.add_argument('-a', '--account-id', help='Customer specific workers', dest='account_id', default=None)
     parser.add_argument('-p', '--pid-file', help='absolution path to the application pid file', dest='pid_file', default='/srv/app/worker.pid')

@@ -16,6 +16,16 @@ ENV AWS_ACCESS_KEY_ID ${AWS_ACCESS_KEY_ID}
 ENV AWS_SECRET_ACCESS_KEY ${AWS_SECRET_ACCESS_KEY}
 ENV LOG_LEVEL ${LOG_LEVEL}
 
+USER root
+RUN echo "Installing whois" \
+    && apt-get update -q \
+    && apt-get install -qy --no-install-recommends whois \
+    && echo "Clean up..." \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /tmp/* /var/lib/apt/lists/*
+
+USER trivialsec
 RUN touch /tmp/application.log \
     && echo "Cloning python-libs from Gitlab" \
     && git clone -q -c advice.detachedHead=false --depth 1 --branch ${COMMON_VERSION} --single-branch https://${GITLAB_USER}:${GITLAB_PASSWORD}@gitlab.com/trivialsec/python-common.git /tmp/trivialsec/python-libs \
