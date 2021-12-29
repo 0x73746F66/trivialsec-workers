@@ -30,7 +30,7 @@ WORKDIR /srv/app
 COPY docker/nikto2/requirements.txt requirements.txt
 COPY src/worker/nikto2/lib lib
 RUN python3 -m pip install -U pip setuptools && \
-    CFLAGS="-O0" STATICBUILD=true python3 -m pip install -q --no-cache-dir --isolated -r requirements.txt
+    CFLAGS="-O0" STATICBUILD=true python3 -m pip install -q --user -r requirements.txt
 
 VOLUME ["/srv/app", "/tmp", "/var/log/nikto2"]
 

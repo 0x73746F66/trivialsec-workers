@@ -3,7 +3,7 @@ LABEL org.opencontainers.image.authors="Christopher Langton"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.source="https://gitlab.com/trivialsec/workers"
 
-ARG COMMON_VERSION
+ARG TRIVIALSEC_PY_LIB_VER
 ARG BUILD_ENV
 ARG GITLAB_USER
 ARG GITLAB_PASSWORD
@@ -19,7 +19,7 @@ ENV LOG_LEVEL ${LOG_LEVEL}
 USER root
 RUN touch /tmp/application.log \
     && echo "Cloning python-libs from Gitlab" \
-    && git clone -q -c advice.detachedHead=false --depth 1 --branch ${COMMON_VERSION} --single-branch https://${GITLAB_USER}:${GITLAB_PASSWORD}@gitlab.com/trivialsec/python-common.git /tmp/trivialsec/python-libs \
+    && git clone -q -c advice.detachedHead=false --depth 1 --branch ${TRIVIALSEC_PY_LIB_VER} --single-branch https://${GITLAB_USER}:${GITLAB_PASSWORD}@gitlab.com/trivialsec/python-common.git /tmp/trivialsec/python-libs \
     && cd /tmp/trivialsec/python-libs \
     && echo "Installing python-libs" \
     && make install \

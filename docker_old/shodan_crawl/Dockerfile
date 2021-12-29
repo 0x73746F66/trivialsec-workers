@@ -9,7 +9,7 @@ RUN mkdir -p lib/bin
 COPY docker/shodan_crawl/requirements.txt requirements.txt
 COPY src/worker/shodan_crawl/lib lib
 RUN python3 -m pip install -U pip setuptools && \
-    CFLAGS="-O0" STATICBUILD=true python3 -m pip install -q --no-cache-dir --isolated -r requirements.txt
+    CFLAGS="-O0" STATICBUILD=true python3 -m pip install -q --user -r requirements.txt
 
 ENTRYPOINT ["python3"]
 CMD ["main.py", "--service", "shodan_crawl"]

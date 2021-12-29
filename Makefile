@@ -25,9 +25,10 @@ prep: ## Cleanup tmp files
 
 python-libs: prep ## download and install the trivialsec python libs locally (for IDE completions)
 	yes | pip uninstall -q trivialsec-common
-	@$(shell git clone -q -c advice.detachedHead=false --depth 1 --branch ${COMMON_VERSION} --single-branch https://${DOCKER_USER}:${DOCKER_PASSWORD}@gitlab.com/trivialsec/python-common.git python-libs)
+	git clone -q -c advice.detachedHead=false --depth 1 --branch ${TRIVIALSEC_PY_LIB_VER} --single-branch git@gitlab.com:trivialsec/python-common.git python-libs
 	cd python-libs
 	make install
+
 install-deps: python-libs ## Just the minimal local deps for IDE completions
 	pip install -q -U pip setuptools wheel semgrep pylint
 	pip install -q -U -r requirements.txt
@@ -48,20 +49,20 @@ build-metadata: ## Builds metadata image using docker cli directly for CI
 	@docker build --compress $(BUILD_ARGS) \
 		-t $(REPO_ORG)/metadata:$(CI_BUILD_REF) \
 		--cache-from $(REPO_ORG)/metadata:latest \
-        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg TRIVIALSEC_PY_LIB_VER=$(TRIVIALSEC_PY_LIB_VER) \
         --build-arg BUILD_ENV=$(BUILD_ENV) \
-        --build-arg GITLAB_USER=$(DOCKER_USER) \
-        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+        --build-arg GITLAB_USER=$(GITLAB_USER) \
+        --build-arg GITLAB_PASSWORD=$(GITLAB_PAT) \
 		-f docker/metadata/Dockerfile .
 
 build-testssl: dep-openssl dep-testssl ## Builds testssl image using docker cli directly for CI
 	@docker build --compress $(BUILD_ARGS) \
 		-t $(REPO_ORG)/testssl:$(CI_BUILD_REF) \
 		--cache-from $(REPO_ORG)/testssl:latest \
-        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg TRIVIALSEC_PY_LIB_VER=$(TRIVIALSEC_PY_LIB_VER) \
         --build-arg BUILD_ENV=$(BUILD_ENV) \
-        --build-arg GITLAB_USER=$(DOCKER_USER) \
-        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+        --build-arg GITLAB_USER=$(GITLAB_USER) \
+        --build-arg GITLAB_PASSWORD=$(GITLAB_PAT) \
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/testssl/Dockerfile .
 
@@ -69,10 +70,10 @@ build-drill: ## Builds drill image using docker cli directly for CI
 	@docker build --compress $(BUILD_ARGS) \
 		-t $(REPO_ORG)/drill:$(CI_BUILD_REF) \
 		--cache-from $(REPO_ORG)/drill:latest \
-        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg TRIVIALSEC_PY_LIB_VER=$(TRIVIALSEC_PY_LIB_VER) \
         --build-arg BUILD_ENV=$(BUILD_ENV) \
-        --build-arg GITLAB_USER=$(DOCKER_USER) \
-        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+        --build-arg GITLAB_USER=$(GITLAB_USER) \
+        --build-arg GITLAB_PASSWORD=$(GITLAB_PAT) \
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/drill/Dockerfile .
 
@@ -80,10 +81,10 @@ build-amass: dep-amass ## Builds amass image using docker cli directly for CI
 	@docker build --compress $(BUILD_ARGS) \
 		-t $(REPO_ORG)/amass:$(CI_BUILD_REF) \
 		--cache-from $(REPO_ORG)/amass:latest \
-        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg TRIVIALSEC_PY_LIB_VER=$(TRIVIALSEC_PY_LIB_VER) \
         --build-arg BUILD_ENV=$(BUILD_ENV) \
-        --build-arg GITLAB_USER=$(DOCKER_USER) \
-        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+        --build-arg GITLAB_USER=$(GITLAB_USER) \
+        --build-arg GITLAB_PASSWORD=$(GITLAB_PAT) \
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/amass/Dockerfile .
 
@@ -91,10 +92,10 @@ build-nmap: dep-nmap ## Builds nmap image using docker cli directly for CI
 	@docker build --compress $(BUILD_ARGS) \
 		-t $(REPO_ORG)/nmap:$(CI_BUILD_REF) \
 		--cache-from $(REPO_ORG)/nmap:latest \
-        --build-arg COMMON_VERSION=$(COMMON_VERSION) \
+        --build-arg TRIVIALSEC_PY_LIB_VER=$(TRIVIALSEC_PY_LIB_VER) \
         --build-arg BUILD_ENV=$(BUILD_ENV) \
-        --build-arg GITLAB_USER=$(DOCKER_USER) \
-        --build-arg GITLAB_PASSWORD=$(DOCKER_PASSWORD) \
+        --build-arg GITLAB_USER=$(GITLAB_USER) \
+        --build-arg GITLAB_PASSWORD=$(GITLAB_PAT) \
 		--build-arg TESTSSL_INSTALL_DIR=$(TESTSSL_INSTALL_DIR) \
 		-f docker/nmap/Dockerfile .
 
@@ -153,9 +154,9 @@ pull: ## pulls latest image
 
 rebuild: down build-ci ## Brings down the stack and builds it anew
 
-docker-login: ## login to docker cli using $DOCKER_USER and $DOCKER_PASSWORD
-	@echo $(shell [ -z "${DOCKER_PASSWORD}" ] && echo "DOCKER_PASSWORD missing" )
-	@echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USER} --password-stdin registry.gitlab.com
+docker-login: ## login to docker cli using $GITLAB_USER and $GITLAB_PAT
+	@echo $(shell [ -z "${GITLAB_PAT}" ] && echo "GITLAB_PAT missing" )
+	@echo ${GITLAB_PAT} | docker login -u ${GITLAB_USER} --password-stdin registry.gitlab.com
 
 up: prep ## Start the app
 	docker-compose up -d metadata testssl drill amass nmap
